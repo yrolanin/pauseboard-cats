@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v4.2</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.0</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -596,12 +596,7 @@ function moveTech(id, direction){
     }
   }
   renderAll();
-  // Écriture granulaire : tech écrit son état, pilote écrit la config
-  if(IS_PILOT) {
-    _broadcastState(); // pilote écrit config + diffuse
-  } else {
-    _broadcastTech(id); // tech écrit uniquement son état
-  }
+  _broadcastState();
 }
 
 
@@ -612,8 +607,6 @@ function moveTech(id, direction){
 // ⚙️  Remplacez les valeurs ci-dessous par celles de votre projet Firebase
 var FB_URL = 'https://pauseboard-cats-default-rtdb.europe-west1.firebasedatabase.app'; // URL de votre base Firebase
 var FB_PATH = '/pauseboard/state.json';
-var FB_CONFIG_PATH = '/pauseboard/config.json';
-var FB_TECHS_PATH  = '/pauseboard/techs/';
 var _fbPollTimer = null;
 var _fbLastHash  = '';
 var _syncing     = false;
@@ -626,6 +619,7 @@ try {
   _syncCh.onmessage = function(e) {
     if(!e.data) return;
     if(e.data.type === 'FULL_STATE') _applyState(e.data);
+    // Pilote répond aux demandes d'état (même navigateur)
     if(e.data.type === 'REQUEST_STATE' && IS_PILOT) {
       try { _syncCh.postMessage(Object.assign({type:'FULL_STATE'}, _statePayload())); } catch(ex){}
     }
@@ -634,20 +628,12 @@ try {
 
 function _applyState(d) {
   _syncing = true;
-  // Pilote garde ses propres maxTokens et currentPeriod
+  // Pilote garde ses propres maxTokens et currentPeriod - ne jamais les écraser
   if(!IS_PILOT) {
     if(d.maxTokens !== undefined)     maxTokens     = d.maxTokens;
     if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
   }
-  // techState : fusionner pour ne pas écraser les états locaux récents
-  if(d.techState !== undefined) {
-    Object.keys(d.techState).forEach(function(id) {
-      var numId = parseInt(id);
-      if(techState[numId] !== undefined) {
-        techState[numId] = d.techState[id];
-      }
-    });
-  }
+  if(d.techState !== undefined)   techState     = d.techState;
   if(d.log !== undefined)         log           = d.log;
   if(d.technicians && d.technicians.length) {
     TECHNICIANS.length = 0;
@@ -674,34 +660,6 @@ function _statePayload() {
   };
 }
 
-// Écriture pilote : config uniquement (maxTokens, période, log)
-function _fbWriteConfig() {
-  var payload = {
-    maxTokens: maxTokens,
-    currentPeriod: currentPeriod,
-    log: log.slice(0, 60),
-    technicians: TECHNICIANS.map(function(t){ return Object.assign({}, t); }),
-    updatedAt: Date.now()
-  };
-  fetch(FB_URL + FB_CONFIG_PATH, {
-    method: 'PUT',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  }).catch(function(ex){ console.warn('Firebase config write error', ex); });
-}
-
-// Écriture tech : uniquement son propre état
-function _fbWriteTech(techId) {
-  var s = techState[techId];
-  if(!s) return;
-  var payload = { col: s.col, pause1Time: s.pause1Time, pause2Time: s.pause2Time, updatedAt: Date.now() };
-  fetch(FB_URL + FB_TECHS_PATH + techId + '.json', {
-    method: 'PUT',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  }).catch(function(ex){ console.warn('Firebase tech write error', ex); });
-}
-
 // Écriture vers Firebase
 function _fbWrite() {
   if(_fbWriting) return;
@@ -715,37 +673,16 @@ function _fbWrite() {
   .catch(function(ex){ console.warn('Firebase write error', ex); _fbWriting = false; });
 }
 
-// Lecture depuis Firebase (config + techs séparés)
+// Lecture depuis Firebase
 function _fbRead(callback) {
-  fetch(FB_URL + '/pauseboard.json')
+  fetch(FB_URL + FB_PATH)
   .then(function(r){ return r.json(); })
-  .then(function(data){
-    if(!data) return;
-    var merged = {};
-    // Config (maxTokens, currentPeriod, log, technicians)
-    if(data.config) {
-      merged.maxTokens     = data.config.maxTokens;
-      merged.currentPeriod = data.config.currentPeriod;
-      merged.log           = data.config.log;
-      merged.technicians   = data.config.technicians;
-      merged.updatedAt     = data.config.updatedAt;
-    }
-    // Techs : reconstruire techState depuis /pauseboard/techs/
-    if(data.techs) {
-      var newTechState = {};
-      Object.keys(data.techs).forEach(function(id) {
-        var t = data.techs[id];
-        var numId = parseInt(id);
-        // Garder l'état local si c'est plus récent
-        newTechState[numId] = { col: t.col, pause1Time: t.pause1Time, pause2Time: t.pause2Time };
-      });
-      merged.techState = newTechState;
-    }
-    // Hash basé sur config + techs
-    var hash = JSON.stringify(data);
-    if(hash === _fbLastHash) return;
+  .then(function(d){
+    if(!d || !d.updatedAt) return;
+    var hash = d.updatedAt + '';
+    if(hash === _fbLastHash) return; // rien de nouveau
     _fbLastHash = hash;
-    _applyState(merged);
+    _applyState(d);
     if(callback) callback();
   })
   .catch(function(ex){ console.warn('Firebase read error', ex); });
@@ -760,18 +697,7 @@ function _spStartPolling() {
 // Broadcast = écriture Firebase + BroadcastChannel local
 function _broadcastState() {
   if(_syncing) return;
-  // Pilote écrit la config, tech écrit son propre état
-  _fbWriteConfig();
-  if(_syncCh) {
-    try {
-      _syncCh.postMessage(Object.assign({ type: 'FULL_STATE' }, _statePayload()));
-    } catch(ex) {}
-  }
-}
-
-// Appelé par moveTech pour écrire uniquement l'état du technicien concerné
-function _broadcastTech(techId) {
-  _fbWriteTech(techId);
+  _fbWrite();
   if(_syncCh) {
     try {
       _syncCh.postMessage(Object.assign({ type: 'FULL_STATE' }, _statePayload()));
@@ -882,16 +808,13 @@ var IS_PILOT   = false;
     // Journal visible uniquement pour le pilote
     var logPanel = document.getElementById('log-panel');
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
-    // Forcer une lecture fraîche à la connexion
-    _fbLastHash = '';
-    // Lecture immédiate Firebase puis démarrage du polling
-    _fbRead(function() {
-      // Callback après chargement initial : pilote écrit son état
-      if(IS_PILOT) { _broadcastState(); }
-    });
-    _fbPollTimer = setInterval(_fbRead, 3000);
+    // Tout le monde démarre le polling Firebase
+    _fbLastHash = ''; // forcer lecture fraîche
+    _spStartPolling();
     // Si technicien : demande l'état via BroadcastChannel (même navigateur)
     if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
+    // Si pilote : écrit immédiatement l'état complet dans Firebase
+    if(IS_PILOT) { setTimeout(_broadcastState, 200); }
   }
 
   btn.addEventListener('click', tryLogin);
