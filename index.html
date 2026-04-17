@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.4</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.5</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -599,9 +599,7 @@ function moveTech(id, direction){
   // Tout le monde écrit l'état du tech dans /techs
   _fbWriteTech(id);
   // Le pilote écrit aussi la config (maxTokens, log, période)
-  if(IS_PILOT) {
-    _fbWriteConfig();
-  }
+  if(IS_PILOT) { _fbWriteConfig(); }
   // Diffusion BroadcastChannel (même navigateur)
   if(_syncCh) { try { _syncCh.postMessage(Object.assign({type:'FULL_STATE'}, _statePayload())); } catch(ex){} }
 }
@@ -697,7 +695,7 @@ function _fbWriteTech(techId) {
   var s = techState[techId];
   if(!s) return;
   var payload = { col: s.col, pause1Time: s.pause1Time, pause2Time: s.pause2Time, updatedAt: Date.now() };
-  fetch(FB_URL + FB_TECHS_PATH + techId + '.json', {
+  fetch(FB_URL + FB_TECHS_PATH + 'tech_' + techId + '.json', {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
@@ -735,11 +733,13 @@ function _fbRead(callback) {
     // Techs : reconstruire techState depuis /pauseboard/techs/
     if(data.techs) {
       var newTechState = {};
-      Object.keys(data.techs).forEach(function(id) {
-        var t = data.techs[id];
-        var numId = parseInt(id);
-        // Garder l'état local si c'est plus récent
-        newTechState[numId] = { col: t.col, pause1Time: t.pause1Time, pause2Time: t.pause2Time };
+      Object.keys(data.techs).forEach(function(key) {
+        var t = data.techs[key];
+        // Clé format 'tech_2' -> extraire l'ID numérique
+        var numId = parseInt(key.toString().replace('tech_', ''));
+        if(!isNaN(numId) && t) {
+          newTechState[numId] = { col: t.col, pause1Time: t.pause1Time || null, pause2Time: t.pause2Time || null };
+        }
       });
       merged.techState = newTechState;
     }
