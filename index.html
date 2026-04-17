@@ -501,22 +501,36 @@ function renderColumn(elId, techs, colType){
   el.innerHTML = techs.map(t=>{
     const s = t.state;
     let nextBtn='', backBtn='';
+    // En mode tech, seul le tech connecté peut interagir avec sa propre ligne
+    const canInteract = IS_PILOT || (CURRENT_TECH !== null && t.name === CURRENT_TECH);
 
     if(colType==='available'){
-      // can go to pause1 only if pause1 not yet done AND not full
       const hasPause1 = s.pause1Time!==null;
       const hasPause2 = s.pause2Time!==null;
-      // next destination: pause1 if not done, else pause2 if pause1 done but not pause2
       const canGoNext = !hasPause1 || (hasPause1&&!hasPause2);
       const btnClass = full ? 'action-btn blocked' : 'action-btn next';
       const btnTitle = full ? 'Quota atteint' : hasPause1 ? 'Prendre pause 2' : 'Prendre pause 1';
-      nextBtn = canGoNext ? `<button class="${btnClass}" onclick="moveTech(${t.id},'forward')" title="${btnTitle}" ${full&&canGoNext?'':''}>${full?'🚫':'▶'}</button>` : '';
+      if(canGoNext && canInteract){
+        nextBtn = `<button class="${btnClass}" onclick="moveTech(${t.id},'forward')" title="${btnTitle}">${full?'🚫':'▶'}</button>`;
+      } else if(canGoNext && !canInteract){
+        nextBtn = `<button class="action-btn" disabled title="Accès restreint" style="opacity:0.25;cursor:not-allowed">▶</button>`;
+      }
     } else if(colType==='pause1'){
-      nextBtn = `<button class="action-btn next" onclick="moveTech(${t.id},'forward')" title="Terminer pause 1">✔</button>`;
-      backBtn = `<button class="action-btn back" onclick="moveTech(${t.id},'back')" title="Annuler">↩</button>`;
+      if(canInteract){
+        nextBtn = `<button class="action-btn next" onclick="moveTech(${t.id},'forward')" title="Terminer pause 1">✔</button>`;
+        backBtn = `<button class="action-btn back" onclick="moveTech(${t.id},'back')" title="Annuler">↩</button>`;
+      } else {
+        nextBtn = `<button class="action-btn" disabled title="Accès restreint" style="opacity:0.25;cursor:not-allowed">✔</button>`;
+        backBtn = `<button class="action-btn" disabled title="Accès restreint" style="opacity:0.25;cursor:not-allowed">↩</button>`;
+      }
     } else if(colType==='pause2'){
-      nextBtn = `<button class="action-btn next" onclick="moveTech(${t.id},'forward')" title="Terminer pause 2">✔</button>`;
-      backBtn = `<button class="action-btn back" onclick="moveTech(${t.id},'back')" title="Annuler">↩</button>`;
+      if(canInteract){
+        nextBtn = `<button class="action-btn next" onclick="moveTech(${t.id},'forward')" title="Terminer pause 2">✔</button>`;
+        backBtn = `<button class="action-btn back" onclick="moveTech(${t.id},'back')" title="Annuler">↩</button>`;
+      } else {
+        nextBtn = `<button class="action-btn" disabled title="Accès restreint" style="opacity:0.25;cursor:not-allowed">✔</button>`;
+        backBtn = `<button class="action-btn" disabled title="Accès restreint" style="opacity:0.25;cursor:not-allowed">↩</button>`;
+      }
     }
 
     const timeLabel = colType==='pause1' && s.pause1Time ? `depuis ${s.pause1Time}` :
@@ -842,8 +856,18 @@ setInterval(updateClock, 10000);
 
 // ── CODES D'ACCÈS (modifiez ici) ─────────────────────────────────────────────
 var PILOT_CODE = '1234';
-var TECH_CODE  = 'tech';
-var IS_PILOT   = false;
+var TECH_CODES = {
+  'amartin':  'Alice Martin',
+  'bdupont':  'Bastien Dupont',
+  'crenard':  'Clara Renard',
+  'dblanc':   'David Blanc',
+  'egirard':  'Emma Girard',
+  'fpetit':   'Florian Petit',
+  'gmoreau':  'Gaëlle Moreau',
+  'hlaurent': 'Hugo Laurent'
+};
+var IS_PILOT     = false;
+var CURRENT_TECH = null;
 
 // ── LOCK SCREEN ───────────────────────────────────────────────────────────────
 (function(){
@@ -862,9 +886,11 @@ var IS_PILOT   = false;
     inp.classList.remove('shake');
     if(v === PILOT_CODE){
       IS_PILOT = true;
+      CURRENT_TECH = null;
       unlock();
-    } else if(v === TECH_CODE){
+    } else if(TECH_CODES.hasOwnProperty(v)){
       IS_PILOT = false;
+      CURRENT_TECH = TECH_CODES[v];
       unlock();
     } else {
       inp.classList.add('shake');
@@ -878,7 +904,7 @@ var IS_PILOT   = false;
   function unlock(){
     document.getElementById('lock-screen').style.display = 'none';
     var badge = document.getElementById('role-badge');
-    if(badge) badge.textContent = IS_PILOT ? 'Pilote' : 'Technicien';
+    if(badge) badge.textContent = IS_PILOT ? 'Pilote' : ('Tech · ' + CURRENT_TECH);
     var pilotPanel = document.querySelector('.pilot-panel');
     if(pilotPanel) pilotPanel.style.display = IS_PILOT ? '' : 'none';
     // Journal visible uniquement pour le pilote
