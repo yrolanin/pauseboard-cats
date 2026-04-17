@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v3.0</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v3.1</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -654,25 +654,25 @@ function _statePayload() {
 }
 
 // Écriture vers Firebase
+var _fbBlockRead = false;
 function _fbWrite() {
   if(_fbWriting) return;
   _fbWriting = true;
-  var payload = _statePayload();
+  // Bloque la lecture pendant 2s pour éviter que le polling écrase l'état qu'on vient d'écrire
+  _fbBlockRead = true;
+  setTimeout(function(){ _fbBlockRead = false; }, 2000);
   fetch(FB_URL + FB_PATH, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
+    body: JSON.stringify(_statePayload())
   })
-  .then(function(){
-    _fbWriting = false;
-    // Met à jour le hash local pour éviter que le polling réécrase l'état qu'on vient d'écrire
-    _fbLastHash = payload.updatedAt + '';
-  })
+  .then(function(){ _fbWriting = false; })
   .catch(function(ex){ console.warn('Firebase write error', ex); _fbWriting = false; });
 }
 
 // Lecture depuis Firebase
 function _fbRead(callback) {
+  if(_fbBlockRead) return; // écriture en cours, on ne lit pas
   fetch(FB_URL + FB_PATH)
   .then(function(r){ return r.json(); })
   .then(function(d){
@@ -806,7 +806,7 @@ var IS_PILOT   = false;
     // Journal visible uniquement pour le pilote
     var logPanel = document.getElementById('log-panel');
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
-    // Démarre le polling Firebase pour tout le monde dès la connexion
+    // Démarre le polling Firebase dès la connexion (pilote ET technicien)
     _spStartPolling();
     // Si technicien : demande l'état courant au pilote (même poste)
     if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
