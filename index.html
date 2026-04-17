@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.3</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.4</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -596,12 +596,14 @@ function moveTech(id, direction){
     }
   }
   renderAll();
-  // Écriture granulaire : tech écrit son état, pilote écrit la config
+  // Tout le monde écrit l'état du tech dans /techs
+  _fbWriteTech(id);
+  // Le pilote écrit aussi la config (maxTokens, log, période)
   if(IS_PILOT) {
-    _broadcastState(); // pilote écrit config + diffuse
-  } else {
-    _broadcastTech(id); // tech écrit uniquement son état
+    _fbWriteConfig();
   }
+  // Diffusion BroadcastChannel (même navigateur)
+  if(_syncCh) { try { _syncCh.postMessage(Object.assign({type:'FULL_STATE'}, _statePayload())); } catch(ex){} }
 }
 
 
