@@ -800,7 +800,9 @@ var IS_PILOT   = false;
     // Journal visible uniquement pour le pilote
     var logPanel = document.getElementById('log-panel');
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
-    // Si technicien : demande l'état courant au pilote
+    // Démarre le polling Firebase dès la connexion (pilote ET technicien)
+    _spStartPolling();
+    // Si technicien : demande l'état courant au pilote (même poste)
     if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
     // Si pilote : diffuse l'état courant
     if(IS_PILOT) { setTimeout(_broadcastState, 200); }
