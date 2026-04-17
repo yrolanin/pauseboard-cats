@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v4.1</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v4.2</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -882,12 +882,16 @@ var IS_PILOT   = false;
     // Journal visible uniquement pour le pilote
     var logPanel = document.getElementById('log-panel');
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
-    // Tout le monde démarre le polling Firebase
-    _spStartPolling();
+    // Forcer une lecture fraîche à la connexion
+    _fbLastHash = '';
+    // Lecture immédiate Firebase puis démarrage du polling
+    _fbRead(function() {
+      // Callback après chargement initial : pilote écrit son état
+      if(IS_PILOT) { _broadcastState(); }
+    });
+    _fbPollTimer = setInterval(_fbRead, 3000);
     // Si technicien : demande l'état via BroadcastChannel (même navigateur)
     if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
-    // Si pilote : écrit immédiatement la config dans Firebase
-    if(IS_PILOT) { setTimeout(_broadcastState, 200); }
   }
 
   btn.addEventListener('click', tryLogin);
