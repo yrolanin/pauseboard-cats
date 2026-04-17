@@ -599,129 +599,37 @@ function moveTech(id, direction){
 }
 
 
-// ── SYNC LOCAL (BroadcastChannel — même poste, multi-onglets) ────────────────
-var _syncCh = null;
-var _syncing = false;
 
+// ══════════════════════════════════════════════════════════════════
+// FIREBASE SYNC — Realtime Database (multi-postes, temps réel)
+// ══════════════════════════════════════════════════════════════════
+// ⚙️  Remplacez les valeurs ci-dessous par celles de votre projet Firebase
+var FB_URL = 'https://pauseboard-cats-default-rtdb.europe-west1.firebasedatabase.app'; // URL de votre base Firebase
+var FB_PATH = '/pauseboard/state.json';
+var _fbPollTimer = null;
+var _fbLastHash  = '';
+var _syncing     = false;
+var _fbWriting   = false;
+
+// Garde aussi BroadcastChannel pour sync instantanée même poste
+var _syncCh = null;
 try {
   _syncCh = new BroadcastChannel('pauseboard-sync-v2');
   _syncCh.onmessage = function(e) {
     if(!e.data || _syncing) return;
-    var d = e.data;
-    if(d.type === 'FULL_STATE') {
-      _syncing = true;
-      maxTokens = d.maxTokens;
-      currentPeriod = d.currentPeriod;
-      techState = d.techState;
-      log = d.log || [];
-      if(d.technicians && d.technicians.length) {
-        TECHNICIANS.length = 0;
-        d.technicians.forEach(function(t){ TECHNICIANS.push(t); });
-      }
-      if(IS_PILOT) {
-        document.getElementById('max-tokens-display').textContent = maxTokens;
-        document.getElementById('period-select').value = currentPeriod;
-      }
-      renderAll();
-      _syncing = false;
-    }
+    if(e.data.type === 'FULL_STATE') _applyState(e.data);
   };
-} catch(ex) {
-  console.warn('BroadcastChannel non disponible');
-}
+} catch(ex) {}
 
-// ══════════════════════════════════════════════════════════════════
-// SHAREPOINT SYNC — remplace BroadcastChannel pour multi-postes
-// ══════════════════════════════════════════════════════════════════
-var SP_SITE    = 'https://helpline.sharepoint.com/sites/CATS-GOUV-REF';
-var SP_LIST    = 'PauseBoardState';
-var SP_API     = SP_SITE + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items";
-var _spHeaders = { 'Accept': 'application/json;odata=nometadata', 'Content-Type': 'application/json;odata=nometadata' };
-var _spItemId  = null;   // ID du premier (et seul) item de la liste
-var _spPollTimer = null;
-var _spLastEtag  = '';
-var _spWriting   = false;
-
-function _spFetch(url, opts) {
-  opts = opts || {};
-  opts.credentials = 'include';
-  opts.headers = Object.assign({}, _spHeaders, opts.headers || {});
-  return fetch(url, opts);
-}
-
-// Lit l'état depuis SharePoint
-function _spRead(callback) {
-  _spFetch(SP_API + '?$select=Id,Title,State&$top=1')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      var items = data.value || [];
-      if(items.length === 0) {
-        // Liste vide : créer le premier item
-        _spItemId = null;
-        _spWrite(true);
-        return;
-      }
-      var item = items[0];
-      _spItemId = item.Id;
-      var etag = item.__metadata ? item.__metadata.etag : item.Id;
-      if(etag === _spLastEtag) return; // rien de nouveau
-      _spLastEtag = etag || item.Id;
-      if(item.State) {
-        try {
-          var d = JSON.parse(item.State);
-          _spApplyState(d);
-          if(callback) callback();
-        } catch(ex) { console.warn('SP parse error', ex); }
-      }
-    })
-    .catch(function(ex) { console.warn('SP read error', ex); });
-}
-
-// Écrit l'état dans SharePoint
-function _spWrite(force) {
-  if(_spWriting && !force) return;
-  _spWriting = true;
-  var payload = JSON.stringify({
-    Title: 'state',
-    State: JSON.stringify({
-      maxTokens: maxTokens,
-      currentPeriod: currentPeriod,
-      techState: techState,
-      log: log.slice(0, 60),
-      technicians: TECHNICIANS.map(function(t) { return Object.assign({}, t); }),
-      updatedAt: Date.now()
-    })
-  });
-
-  if(_spItemId) {
-    // PATCH item existant
-    _spFetch(SP_API + '(' + _spItemId + ')', {
-      method: 'POST',
-      headers: { 'X-HTTP-Method': 'MERGE', 'IF-MATCH': '*' },
-      body: payload
-    })
-    .then(function() { _spWriting = false; })
-    .catch(function(ex) { console.warn('SP write error', ex); _spWriting = false; });
-  } else {
-    // POST nouvel item
-    _spFetch(SP_API, { method: 'POST', body: payload })
-    .then(function(r) { return r.json(); })
-    .then(function(d) { _spItemId = d.Id || d.id; _spWriting = false; })
-    .catch(function(ex) { console.warn('SP create error', ex); _spWriting = false; });
-  }
-}
-
-// Applique un état reçu de SP sans reboucler
-function _spApplyState(d) {
-  var _prev = _syncing;
+function _applyState(d) {
   _syncing = true;
-  if(d.maxTokens !== undefined) maxTokens = d.maxTokens;
+  if(d.maxTokens !== undefined)   maxTokens     = d.maxTokens;
   if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
-  if(d.techState !== undefined) techState = d.techState;
-  if(d.log !== undefined) log = d.log;
+  if(d.techState !== undefined)   techState     = d.techState;
+  if(d.log !== undefined)         log           = d.log;
   if(d.technicians && d.technicians.length) {
     TECHNICIANS.length = 0;
-    d.technicians.forEach(function(t) { TECHNICIANS.push(t); });
+    d.technicians.forEach(function(t){ TECHNICIANS.push(t); });
   }
   if(IS_PILOT) {
     var el = document.getElementById('max-tokens-display');
@@ -730,34 +638,64 @@ function _spApplyState(d) {
     if(sel) sel.value = currentPeriod;
   }
   renderAll();
-  _syncing = _prev;
+  _syncing = false;
 }
 
-// Démarre le polling (toutes les 5s)
+function _statePayload() {
+  return {
+    maxTokens: maxTokens,
+    currentPeriod: currentPeriod,
+    techState: techState,
+    log: log.slice(0, 60),
+    technicians: TECHNICIANS.map(function(t){ return Object.assign({}, t); }),
+    updatedAt: Date.now()
+  };
+}
+
+// Écriture vers Firebase
+function _fbWrite() {
+  if(_fbWriting) return;
+  _fbWriting = true;
+  fetch(FB_URL + FB_PATH, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(_statePayload())
+  })
+  .then(function(){ _fbWriting = false; })
+  .catch(function(ex){ console.warn('Firebase write error', ex); _fbWriting = false; });
+}
+
+// Lecture depuis Firebase
+function _fbRead(callback) {
+  fetch(FB_URL + FB_PATH)
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d || !d.updatedAt) return;
+    var hash = d.updatedAt + '';
+    if(hash === _fbLastHash) return; // rien de nouveau
+    _fbLastHash = hash;
+    _applyState(d);
+    if(callback) callback();
+  })
+  .catch(function(ex){ console.warn('Firebase read error', ex); });
+}
+
+// Démarre le polling toutes les 3 secondes
 function _spStartPolling() {
-  _spRead();
-  _spPollTimer = setInterval(_spRead, 5000);
+  _fbRead();
+  _fbPollTimer = setInterval(_fbRead, 3000);
 }
 
-// Broadcast = écriture SP
+// Broadcast = écriture Firebase + BroadcastChannel local
 function _broadcastState() {
   if(_syncing) return;
-  _spWrite();
-  // Aussi BroadcastChannel local si dispo (même poste, multi-onglets)
+  _fbWrite();
   if(_syncCh) {
     try {
-      _syncCh.postMessage({
-        type: 'FULL_STATE',
-        maxTokens: maxTokens,
-        currentPeriod: currentPeriod,
-        techState: JSON.parse(JSON.stringify(techState)),
-        log: log.slice(0, 60),
-        technicians: TECHNICIANS.map(function(t) { return Object.assign({}, t); })
-      });
+      _syncCh.postMessage(Object.assign({ type: 'FULL_STATE' }, _statePayload()));
     } catch(ex) {}
   }
 }
-
 
 
 // ── CONTROLS ─────────────────────────────────────────────────────────────────
@@ -790,7 +728,8 @@ document.getElementById('refresh-btn').addEventListener('click', function() {
   var btn = this;
   btn.style.animation = 'spin 0.6s ease';
   setTimeout(function(){ btn.style.animation = ''; }, 650);
-  _spRead(function(){ showToast('Données actualisées ✓', 'success'); });
+  _broadcastState();
+  showToast('Etat synchronise avec les autres onglets', 'success');
 });
 
 // ── CLOCK ────────────────────────────────────────────────────────────────────
@@ -861,8 +800,10 @@ var IS_PILOT   = false;
     // Journal visible uniquement pour le pilote
     var logPanel = document.getElementById('log-panel');
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
-    // Démarrer la synchronisation SharePoint
-    _spStartPolling();
+    // Si technicien : demande l'état courant au pilote
+    if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
+    // Si pilote : diffuse l'état courant
+    if(IS_PILOT) { setTimeout(_broadcastState, 200); }
   }
 
   btn.addEventListener('click', tryLogin);
