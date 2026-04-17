@@ -622,6 +622,8 @@ try {
 } catch(ex) {}
 
 function _applyState(d) {
+  // Le pilote ne reçoit pas les mises à jour Firebase (il en est la source)
+  if(IS_PILOT) { return; }
   _syncing = true;
   if(d.maxTokens !== undefined)   maxTokens     = d.maxTokens;
   if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
