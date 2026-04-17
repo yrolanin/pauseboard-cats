@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.0</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.1</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -619,7 +619,6 @@ try {
   _syncCh.onmessage = function(e) {
     if(!e.data) return;
     if(e.data.type === 'FULL_STATE') _applyState(e.data);
-    // Pilote répond aux demandes d'état (même navigateur)
     if(e.data.type === 'REQUEST_STATE' && IS_PILOT) {
       try { _syncCh.postMessage(Object.assign({type:'FULL_STATE'}, _statePayload())); } catch(ex){}
     }
@@ -628,11 +627,8 @@ try {
 
 function _applyState(d) {
   _syncing = true;
-  // Pilote garde ses propres maxTokens et currentPeriod - ne jamais les écraser
-  if(!IS_PILOT) {
-    if(d.maxTokens !== undefined)     maxTokens     = d.maxTokens;
-    if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
-  }
+  if(d.maxTokens !== undefined)   maxTokens     = d.maxTokens;
+  if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
   if(d.techState !== undefined)   techState     = d.techState;
   if(d.log !== undefined)         log           = d.log;
   if(d.technicians && d.technicians.length) {
@@ -664,12 +660,17 @@ function _statePayload() {
 function _fbWrite() {
   if(_fbWriting) return;
   _fbWriting = true;
+  var payload = _statePayload();
   fetch(FB_URL + FB_PATH, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(_statePayload())
+    body: JSON.stringify(payload)
   })
-  .then(function(){ _fbWriting = false; })
+  .then(function(){
+    _fbWriting = false;
+    // Mettre à jour le hash pour que le prochain poll ne réécrase pas ce qu'on vient d'écrire
+    _fbLastHash = String(payload.updatedAt);
+  })
   .catch(function(ex){ console.warn('Firebase write error', ex); _fbWriting = false; });
 }
 
@@ -809,11 +810,11 @@ var IS_PILOT   = false;
     var logPanel = document.getElementById('log-panel');
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
     // Tout le monde démarre le polling Firebase
-    _fbLastHash = ''; // forcer lecture fraîche
+    _fbLastHash = '';
     _spStartPolling();
     // Si technicien : demande l'état via BroadcastChannel (même navigateur)
     if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
-    // Si pilote : écrit immédiatement l'état complet dans Firebase
+    // Si pilote : écrit immédiatement l'état dans Firebase
     if(IS_PILOT) { setTimeout(_broadcastState, 200); }
   }
 
