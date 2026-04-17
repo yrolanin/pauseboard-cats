@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v3.2</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v3.3</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -617,14 +617,18 @@ var _syncCh = null;
 try {
   _syncCh = new BroadcastChannel('pauseboard-sync-v2');
   _syncCh.onmessage = function(e) {
-    if(!e.data || _syncing) return;
-    if(e.data.type === 'FULL_STATE') _applyState(e.data);
+    if(!e.data) return;
+    if(e.data.type === 'FULL_STATE') _applyState(e.data, false);
+    // Si le pilote reçoit une demande d'état, il répond
+    if(e.data.type === 'REQUEST_STATE' && IS_PILOT) {
+      try { _syncCh.postMessage(Object.assign({type:'FULL_STATE'}, _statePayload())); } catch(ex){}
+    }
   };
 } catch(ex) {}
 
-function _applyState(d) {
-  // Le pilote est la source de vérité - il n'écoute jamais Firebase
-  if(IS_PILOT) return;
+function _applyState(d, fromFirebase) {
+  // Le pilote ignore les lectures Firebase (il est la source), mais écoute le BroadcastChannel
+  if(IS_PILOT && fromFirebase) return;
   _syncing = true;
   if(d.maxTokens !== undefined)   maxTokens     = d.maxTokens;
   if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
@@ -656,9 +660,13 @@ function _statePayload() {
 }
 
 // Écriture vers Firebase
+var _fbBlockRead = false;
 function _fbWrite() {
   if(_fbWriting) return;
   _fbWriting = true;
+  // Bloque la lecture 2s pour éviter que le polling réécrase l'état local
+  _fbBlockRead = true;
+  setTimeout(function(){ _fbBlockRead = false; }, 2000);
   fetch(FB_URL + FB_PATH, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
@@ -673,11 +681,12 @@ function _fbRead(callback) {
   fetch(FB_URL + FB_PATH)
   .then(function(r){ return r.json(); })
   .then(function(d){
+    if(_fbBlockRead) return; // écriture locale en cours
     if(!d || !d.updatedAt) return;
     var hash = d.updatedAt + '';
     if(hash === _fbLastHash) return; // rien de nouveau
     _fbLastHash = hash;
-    _applyState(d);
+    _applyState(d, true);
     if(callback) callback();
   })
   .catch(function(ex){ console.warn('Firebase read error', ex); });
@@ -805,9 +814,9 @@ var IS_PILOT   = false;
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
     // Polling Firebase uniquement pour le technicien
     if(!IS_PILOT) { _spStartPolling(); }
-    // Si technicien : demande l'état courant au pilote (même poste)
+    // Si technicien : demande l'état courant au pilote (même poste/navigateur)
     if(!IS_PILOT && _syncCh) { try { _syncCh.postMessage({type:'REQUEST_STATE'}); } catch(ex){} }
-    // Si pilote : écrit l'état dans Firebase immédiatement
+    // Si pilote : écrit immédiatement l'état dans Firebase
     if(IS_PILOT) { setTimeout(_broadcastState, 200); }
   }
 
