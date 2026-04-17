@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestionnaire de Pauses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ───────────────────────────────────────────────── */
+:root,[data-theme="light"]{
+  --color-bg:#f7f6f2;--color-surface:#f9f8f5;--color-surface-2:#fbfbf9;
+  --color-surface-offset:#f3f0ec;--color-surface-dynamic:#e6e4df;
+  --color-divider:#dcd9d5;--color-border:#d4d1ca;
+  --color-text:#28251d;--color-text-muted:#7a7974;--color-text-faint:#bab9b4;
+  --color-primary:#01696f;--color-primary-hover:#0c4e54;--color-primary-active:#0f3638;
+  --color-primary-highlight:#cedcd8;
+  --color-success:#437a22;--color-success-hover:#2e5c10;--color-success-highlight:#d4dfcc;
+  --color-warning:#964219;--color-warning-highlight:#ddcfc6;
+  --color-error:#a12c7b;--color-error-highlight:#e0ced7;
+  --color-orange:#da7101;--color-orange-highlight:#e7d7c4;
+  --color-gold:#d19900;--color-gold-highlight:#e9e0c6;
+  --radius-sm:0.375rem;--radius-md:0.5rem;--radius-lg:0.75rem;--radius-xl:1rem;--radius-full:9999px;
+  --shadow-sm:0 1px 2px oklch(0.2 0.01 80/0.06);
+  --shadow-md:0 4px 12px oklch(0.2 0.01 80/0.08);
+  --shadow-lg:0 12px 32px oklch(0.2 0.01 80/0.12);
+  --transition:180ms cubic-bezier(0.16,1,0.3,1);
+  --font-body:'Inter','Helvetica Neue',sans-serif;
+  --font-display:'Instrument Serif',Georgia,serif;
+  --text-xs:clamp(0.75rem,0.7rem + 0.25vw,0.875rem);
+  --text-sm:clamp(0.875rem,0.8rem + 0.35vw,1rem);
+  --text-base:clamp(1rem,0.95rem + 0.25vw,1.125rem);
+  --text-lg:clamp(1.125rem,1rem + 0.75vw,1.5rem);
+  --text-xl:clamp(1.5rem,1.2rem + 1.25vw,2.25rem);
+  --space-1:0.25rem;--space-2:0.5rem;--space-3:0.75rem;--space-4:1rem;
+  --space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;
+  --space-12:3rem;--space-16:4rem;
+}
+[data-theme="dark"]{
+  --color-bg:#171614;--color-surface:#1c1b19;--color-surface-2:#201f1d;
+  --color-surface-offset:#1d1c1a;--color-surface-dynamic:#2d2c2a;
+  --color-divider:#262523;--color-border:#393836;
+  --color-text:#cdccca;--color-text-muted:#797876;--color-text-faint:#5a5957;
+  --color-primary:#4f98a3;--color-primary-hover:#227f8b;--color-primary-active:#1a626b;
+  --color-primary-highlight:#313b3b;
+  --color-success:#6daa45;--color-success-hover:#4d8f25;--color-success-highlight:#3a4435;
+  --color-warning:#bb653b;--color-warning-highlight:#564942;
+  --color-error:#d163a7;--color-error-highlight:#4c3d46;
+  --color-orange:#fdab43;--color-orange-highlight:#564b3e;
+  --color-gold:#e8af34;--color-gold-highlight:#4d4332;
+  --shadow-sm:0 1px 2px oklch(0 0 0/0.2);
+  --shadow-md:0 4px 12px oklch(0 0 0/0.3);
+  --shadow-lg:0 12px 32px oklch(0 0 0/0.4);
+}
+
+/* ── BASE ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;scroll-behavior:smooth}
+body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);color:var(--color-text);background:var(--color-bg);transition:background var(--transition),color var(--transition)}
+img{display:block;max-width:100%;height:auto}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+input,select{font:inherit;color:inherit}
+
+/* ── LAYOUT ───────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;min-height:100dvh}
+.header{background:var(--color-surface);border-bottom:1px solid var(--color-border);padding:var(--space-3) var(--space-6);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm)}
+.header-left{display:flex;align-items:center;gap:var(--space-3)}
+.logo{display:flex;align-items:center;gap:var(--space-2)}
+.logo-icon{width:32px;height:32px;color:var(--color-primary)}
+.logo-text{font-family:var(--font-display);font-size:var(--text-lg);color:var(--color-text);line-height:1.1}
+.logo-text span{color:var(--color-primary)}
+.time-badge{background:var(--color-surface-offset);border:1px solid var(--color-border);border-radius:var(--radius-full);padding:var(--space-1) var(--space-3);font-size:var(--text-xs);color:var(--color-text-muted);font-variant-numeric:tabular-nums}
+.header-right{display:flex;align-items:center;gap:var(--space-2)}
+
+/* ── THEME TOGGLE ─────────────────────────────────────────── */
+.theme-toggle{width:36px;height:36px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;color:var(--color-text-muted);transition:background var(--transition),color var(--transition)}
+.theme-toggle:hover{background:var(--color-surface-offset);color:var(--color-text)}
+
+/* ── MAIN CONTENT ─────────────────────────────────────────── */
+.main{flex:1;padding:var(--space-6);max-width:1400px;margin-inline:auto;width:100%;display:flex;flex-direction:column;gap:var(--space-6)}
+
+/* ── PILOT PANEL ──────────────────────────────────────────── */
+.pilot-panel{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-5) var(--space-6);box-shadow:var(--shadow-sm)}
+.panel-header{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)}
+.panel-title{font-size:var(--text-base);font-weight:600;color:var(--color-text)}
+.panel-subtitle{font-size:var(--text-xs);color:var(--color-text-muted);margin-top:2px}
+.badge-role{display:inline-flex;align-items:center;gap:var(--space-1);background:var(--color-primary-highlight);color:var(--color-primary);font-size:var(--text-xs);font-weight:600;padding:2px var(--space-2);border-radius:var(--radius-full);text-transform:uppercase;letter-spacing:0.05em}
+.pilot-controls{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap}
+.control-group{display:flex;flex-direction:column;gap:var(--space-1)}
+.control-label{font-size:var(--text-xs);font-weight:500;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.06em}
+.token-control{display:flex;align-items:center;gap:var(--space-2)}
+.token-btn{width:36px;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-border);background:var(--color-surface-offset);color:var(--color-text);font-size:var(--text-lg);font-weight:500;display:flex;align-items:center;justify-content:center;transition:background var(--transition),border-color var(--transition),color var(--transition)}
+.token-btn:hover{background:var(--color-surface-dynamic);border-color:var(--color-primary)}
+.token-value{min-width:40px;text-align:center;font-size:var(--text-xl);font-weight:700;color:var(--color-text);font-variant-numeric:tabular-nums}
+.period-select{background:var(--color-surface-offset);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);color:var(--color-text);transition:border-color var(--transition)}
+.period-select:focus{outline:2px solid var(--color-primary);outline-offset:2px;border-color:transparent}
+.reset-btn{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);border:1px solid var(--color-border);background:var(--color-surface-offset);font-size:var(--text-sm);color:var(--color-text-muted);transition:all var(--transition)}
+.reset-btn:hover{background:var(--color-warning-highlight);color:var(--color-warning);border-color:var(--color-warning)}
+
+/* ── STATS ROW ────────────────────────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--space-3)}
+.stat-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-4);box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:var(--space-1)}
+.stat-label{font-size:var(--text-xs);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:500}
+.stat-value{font-size:var(--text-xl);font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.stat-value.green{color:var(--color-success)}
+.stat-value.orange{color:var(--color-orange)}
+.stat-value.red{color:var(--color-error)}
+.stat-value.primary{color:var(--color-primary)}
+.stat-sub{font-size:var(--text-xs);color:var(--color-text-faint)}
+
+/* ── TOKEN INDICATOR ──────────────────────────────────────── */
+.token-indicator{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-4) var(--space-6);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap}
+.token-info{display:flex;flex-direction:column;gap:var(--space-1)}
+.token-title{font-size:var(--text-sm);font-weight:600;color:var(--color-text)}
+.token-desc{font-size:var(--text-xs);color:var(--color-text-muted)}
+.token-slots{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap}
+.token-slot{width:44px;height:44px;border-radius:var(--radius-md);border:2px solid var(--color-border);background:var(--color-surface-offset);display:flex;align-items:center;justify-content:center;font-size:var(--text-xs);font-weight:700;transition:all var(--transition);position:relative;overflow:hidden}
+.token-slot.used{background:var(--color-primary-highlight);border-color:var(--color-primary);color:var(--color-primary)}
+.token-slot.available{background:var(--color-success-highlight);border-color:var(--color-success);color:var(--color-success)}
+.token-slot.blocked{background:var(--color-error-highlight);border-color:var(--color-error);color:var(--color-error)}
+.token-status{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-radius:var(--radius-full);font-size:var(--text-sm);font-weight:600}
+.token-status.open{background:var(--color-success-highlight);color:var(--color-success)}
+.token-status.full{background:var(--color-error-highlight);color:var(--color-error)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ── BOARD ────────────────────────────────────────────────── */
+.board{display:grid;grid-template-columns:2fr 1fr 1fr;gap:var(--space-3)}
+@media(max-width:768px){.board{grid-template-columns:1fr;gap:var(--space-3)}}
+.column{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
+.column-header{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider);display:flex;align-items:center;justify-content:space-between;background:var(--color-surface-offset)}
+.column-title{font-size:var(--text-sm);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;display:flex;align-items:center;gap:var(--space-2)}
+.column-count{min-width:22px;height:22px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;font-size:var(--text-xs);font-weight:700;background:var(--color-surface-dynamic);color:var(--color-text-muted)}
+.col-available .column-header{background:color-mix(in oklch,var(--color-primary) 6%,var(--color-surface-offset))}
+.col-available .column-title{color:var(--color-primary)}
+.col-pause1 .column-header{background:color-mix(in oklch,var(--color-orange) 6%,var(--color-surface-offset))}
+.col-pause1 .column-title{color:var(--color-orange)}
+.col-pause2 .column-header{background:color-mix(in oklch,var(--color-gold) 6%,var(--color-surface-offset))}
+.col-pause2 .column-title{color:var(--color-gold)}
+.column-body{padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);min-height:200px}
+
+/* ── TECH CARD ────────────────────────────────────────────── */
+.tech-card{background:var(--color-surface-2);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);display:flex;align-items:center;gap:var(--space-3);transition:all var(--transition);cursor:default}
+.tech-card:hover{box-shadow:var(--shadow-md);border-color:var(--color-primary);transform:translateY(-1px)}
+.tech-avatar{width:36px;height:36px;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;font-size:var(--text-sm);font-weight:700;color:#fff;flex-shrink:0}
+.tech-info{flex:1;min-width:0}
+.tech-name{font-size:var(--text-sm);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tech-time{font-size:var(--text-xs);color:var(--color-text-muted);font-variant-numeric:tabular-nums}
+.tech-actions{display:flex;gap:var(--space-1);flex-shrink:0}
+.action-btn{width:30px;height:30px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:14px;border:1px solid transparent;transition:all var(--transition)}
+.action-btn.next{background:var(--color-primary-highlight);color:var(--color-primary)}
+.action-btn.next:hover{background:var(--color-primary);color:#fff}
+.action-btn.back{background:var(--color-surface-offset);color:var(--color-text-muted)}
+.action-btn.back:hover{background:var(--color-surface-dynamic);color:var(--color-text)}
+.action-btn:disabled{opacity:0.3;cursor:not-allowed;pointer-events:none}
+.action-btn.blocked{background:var(--color-error-highlight);color:var(--color-error)}
+.action-btn.blocked:hover{background:var(--color-error);color:#fff}
+
+/* ── TOAST ────────────────────────────────────────────────── */
+.toast-container{position:fixed;bottom:var(--space-6);right:var(--space-6);display:flex;flex-direction:column;gap:var(--space-2);z-index:999}
+.toast{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);box-shadow:var(--shadow-lg);font-size:var(--text-sm);max-width:320px;display:flex;align-items:center;gap:var(--space-3);animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1);opacity:0;transform:translateX(20px)}
+.toast.show{opacity:1;transform:translateX(0);transition:opacity 0.3s,transform 0.3s cubic-bezier(0.16,1,0.3,1)}
+.toast.hide{opacity:0;transform:translateX(20px);transition:opacity 0.3s,transform 0.3s}
+.toast.error{border-color:var(--color-error);background:var(--color-error-highlight)}
+.toast.success{border-color:var(--color-success);background:var(--color-success-highlight)}
+.toast-icon{font-size:18px;flex-shrink:0}
+
+/* ── HISTORY LOG ──────────────────────────────────────────── */
+.log-panel{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
+.log-header{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider);background:var(--color-surface-offset);display:flex;align-items:center;justify-content:space-between}
+.log-title{font-size:var(--text-sm);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-text-muted)}
+.log-body{padding:var(--space-3);max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:var(--space-1)}
+.log-entry{font-size:var(--text-xs);color:var(--color-text-muted);display:flex;align-items:flex-start;gap:var(--space-2);padding:var(--space-1) 0;border-bottom:1px solid var(--color-divider)}
+.log-entry:last-child{border-bottom:none}
+.log-time{color:var(--color-text-faint);font-variant-numeric:tabular-nums;flex-shrink:0;min-width:44px}
+.log-empty{color:var(--color-text-faint);font-size:var(--text-xs);text-align:center;padding:var(--space-6);font-style:italic}
+
+/* ── SCROLLBAR ────────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--color-border);border-radius:var(--radius-full)}
+
+/* ── FOCUS ────────────────────────────────────────────────── */
+:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px;border-radius:var(--radius-sm)}
+
+/* ── LOCK SCREEN ──────────────────────────────────────────── */
+#lock-screen{position:fixed;inset:0;background:var(--color-bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+.lock-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-10) var(--space-12);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;align-items:center;gap:var(--space-5);width:min(380px,90vw);text-align:center}
+.lock-card svg.lock-ico{color:var(--color-primary);width:52px;height:52px}
+.lock-title{font-family:var(--font-display);font-size:var(--text-xl);line-height:1.1}
+.lock-title span{color:var(--color-primary)}
+.lock-sub{font-size:var(--text-sm);color:var(--color-text-muted)}
+.lock-input-wrap{width:100%;position:relative}
+#lock-input{width:100%;padding:var(--space-3) var(--space-4);padding-right:44px;border:1.5px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-offset);font-size:var(--text-base);outline:none;transition:border-color var(--transition)}
+#lock-input:focus{border-color:var(--color-primary)}
+#lock-input.shake{animation:lock-shake .35s ease;border-color:var(--color-error);background:var(--color-error-highlight)}
+@keyframes lock-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.lock-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--color-text-muted);padding:4px;display:flex;align-items:center;justify-content:center}
+.lock-eye:hover{color:var(--color-text)}
+.lock-error{font-size:var(--text-xs);color:var(--color-error);min-height:16px}
+.lock-submit{width:100%;padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);background:var(--color-primary);color:#fff;font-size:var(--text-sm);font-weight:600;transition:background var(--transition)}
+.lock-submit:hover{background:var(--color-primary-hover)}
+.role-badge{font-size:var(--text-xs);color:var(--color-text-muted);padding:2px 10px;background:var(--color-surface-offset);border-radius:var(--radius-full);border:1px solid var(--color-border)}
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lock-screen">
+  <div class="lock-card">
+    <svg class="lock-ico" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="48" height="48" rx="14" fill="currentColor" opacity="0.1"/>
+      <rect x="15" y="24" width="22" height="16" rx="4" stroke="currentColor" stroke-width="2" fill="currentColor" opacity="0.15"/>
+      <path d="M20 24v-5a6 6 0 0 1 12 0v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="26" cy="32" r="2.5" fill="currentColor"/>
+    </svg>
+    <div>
+      <div class="lock-title">Pause<span>Board</span></div>
+      <div class="lock-sub" style="margin-top:4px">Entrez votre code d&rsquo;acc&egrave;s</div>
+    </div>
+    <div class="lock-input-wrap">
+      <input id="lock-input" type="password" placeholder="Code d&rsquo;acc&egrave;s&hellip;" autocomplete="off" maxlength="30">
+      <button class="lock-eye" id="lock-eye" type="button" aria-label="Afficher le code">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+    <div class="lock-error" id="lock-error"></div>
+    <button class="lock-submit" id="lock-submit" type="button">Acc&eacute;der &rarr;</button>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 32 32" fill="none" aria-label="PauseBoard" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="28" height="28" rx="7" fill="currentColor" opacity="0.12"/>
+          <rect x="9" y="9" width="5" height="14" rx="2.5" fill="currentColor"/>
+          <rect x="18" y="9" width="5" height="14" rx="2.5" fill="currentColor"/>
+        </svg>
+        <div>
+          <div class="logo-text">Pause<span>Board</span></div>
+        </div>
+      </div>
+      <div class="time-badge" id="clock">--:--</div>
+    </div>
+    <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
+      <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+      <button class="theme-toggle" data-theme-toggle aria-label="Changer le thème">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- PILOT PANEL -->
+    <section class="pilot-panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">⚙️ Panneau Pilote</div>
+          <div class="panel-subtitle">Configuration des jetons de pauses simultanées</div>
+        </div>
+        <span class="badge-role">👤 Pilote</span>
+      </div>
+      <div class="pilot-controls">
+        <div class="control-group">
+          <div class="control-label">Pauses simultanées max</div>
+          <div class="token-control">
+            <button class="token-btn" id="dec-tokens" aria-label="Diminuer">−</button>
+            <div class="token-value" id="max-tokens-display">2</div>
+            <button class="token-btn" id="inc-tokens" aria-label="Augmenter">+</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="control-label">Créneau actif</div>
+          <select class="period-select" id="period-select">
+            <option value="matin">☀️ Matin (10h–12h)</option>
+            <option value="aprem">🌤️ Après-midi (14h30–17h30)</option>
+          </select>
+        </div>
+        <button class="reset-btn" id="reset-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          Réinitialiser les pauses
+        </button>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <div class="stats-row" id="stats-row"></div>
+
+    <!-- TOKEN INDICATOR -->
+    <div class="token-indicator">
+      <div class="token-info">
+        <div class="token-title">Jetons disponibles — <span id="period-label">Matin</span></div>
+        <div class="token-desc">Chaque jeton représente une pause simultanée autorisée</div>
+      </div>
+      <div class="token-slots" id="token-slots"></div>
+      <div class="token-status" id="token-status">
+        <div class="status-dot"></div>
+        <span id="token-status-text">Ouvert</span>
+      </div>
+    </div>
+
+    <!-- BOARD -->
+    <div class="board">
+      <div class="column col-available">
+        <div class="column-header">
+          <div class="column-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            Disponible
+          </div>
+          <div class="column-count" id="count-available">0</div>
+        </div>
+        <div class="column-body" id="col-available"></div>
+      </div>
+      <div class="column col-pause1">
+        <div class="column-header">
+          <div class="column-title">☕ Pause 1</div>
+          <div class="column-count" id="count-pause1">0</div>
+        </div>
+        <div class="column-body" id="col-pause1"></div>
+      </div>
+      <div class="column col-pause2">
+        <div class="column-header">
+          <div class="column-title">🍵 Pause 2</div>
+          <div class="column-count" id="count-pause2">0</div>
+        </div>
+        <div class="column-body" id="col-pause2"></div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="log-panel" id="log-panel" style="display:none">
+      <div class="log-header">
+        <div class="log-title">📋 Journal des mouvements</div>
+        <button class="reset-btn" id="clear-log" style="padding:var(--space-1) var(--space-3)">Effacer</button>
+      </div>
+      <div class="log-body" id="log-body">
+        <div class="log-empty">Aucun mouvement enregistré.</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────────────────────────
+const TECHNICIANS = [
+  {id:1,name:'Alice Martin',color:'#01696f'},
+  {id:2,name:'Bastien Dupont',color:'#da7101'},
+  {id:3,name:'Clara Renard',color:'#7a39bb'},
+  {id:4,name:'David Blanc',color:'#964219'},
+  {id:5,name:'Emma Girard',color:'#437a22'},
+  {id:6,name:'Florian Petit',color:'#006494'},
+  {id:7,name:'Gaëlle Moreau',color:'#a12c7b'},
+  {id:8,name:'Hugo Laurent',color:'#d19900'},
+];
+
+let maxTokens = 2;
+let currentPeriod = 'matin';
+let log = [];
+
+// State: techId -> { pause1Time, pause2Time } (null = not yet taken)
+// column: 'available' | 'pause1' | 'pause2'
+let techState = {};
+TECHNICIANS.forEach(t => {
+  techState[t.id] = {col:'available', pause1Time:null, pause2Time:null};
+});
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function nowStr(){
+  return new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function getInitials(name){
+  return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+}
+function countInPause(){
+  return Object.values(techState).filter(s=>s.col==='pause1'||s.col==='pause2').length;
+}
+function addLog(msg){
+  log.unshift({time:nowStr(),msg});
+  if(log.length>50) log.pop();
+  renderLog();
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg, type='info'){
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast '+type;
+  const icon = type==='error'?'🚫':type==='success'?'✅':'ℹ️';
+  t.innerHTML = `<span class="toast-icon">${icon}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  requestAnimationFrame(()=>{ t.classList.add('show'); });
+  setTimeout(()=>{ t.classList.add('hide'); setTimeout(()=>t.remove(), 300); }, 3000);
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function renderAll(){
+  renderTokenIndicator();
+  renderBoard();
+  renderStats();
+  if(typeof renderLog === "function") renderLog();
+}
+
+function renderStats(){
+  const inPause = countInPause();
+  const available = Object.values(techState).filter(s=>s.col==='available').length;
+  const p1done = Object.values(techState).filter(s=>s.pause1Time!==null).length;
+  const p2done = Object.values(techState).filter(s=>s.pause2Time!==null).length;
+  const remaining = maxTokens - inPause;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">En pause</div>
+      <div class="stat-value ${inPause>0?'orange':'green'}">${inPause}</div>
+      <div class="stat-sub">/ ${maxTokens} simultanés max</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Disponibles</div>
+      <div class="stat-value primary">${available}</div>
+      <div class="stat-sub">techniciens actifs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Jetons restants</div>
+      <div class="stat-value ${remaining===0?'red':remaining===1?'orange':'green'}">${remaining}</div>
+      <div class="stat-sub">pauses autorisées</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pause 1 prise</div>
+      <div class="stat-value primary">${p1done}</div>
+      <div class="stat-sub">/ ${TECHNICIANS.length} techniciens</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pause 2 prise</div>
+      <div class="stat-value primary">${p2done}</div>
+      <div class="stat-sub">/ ${TECHNICIANS.length} techniciens</div>
+    </div>
+  `;
+}
+
+function renderTokenIndicator(){
+  const inPause = countInPause();
+  const slots = document.getElementById('token-slots');
+  const statusEl = document.getElementById('token-status');
+  const statusText = document.getElementById('token-status-text');
+  const periodLabel = document.getElementById('period-label');
+  periodLabel.textContent = currentPeriod==='matin'?'Matin (10h–12h)':'Après-midi (14h30–17h30)';
+
+  let html = '';
+  for(let i=0;i<maxTokens;i++){
+    const used = i < inPause;
+    html += `<div class="token-slot ${used?'used':'available'}" title="${used?'Utilisé':'Libre'}">${used?'⏸':'▶'}</div>`;
+  }
+  slots.innerHTML = html;
+
+  if(inPause>=maxTokens){
+    statusEl.className='token-status full';
+    statusText.textContent='Pauses complètes';
+  } else {
+    statusEl.className='token-status open';
+    statusText.textContent='Ouvert';
+  }
+}
+
+function renderBoard(){
+  const cols = {available:[],pause1:[],pause2:[]};
+  TECHNICIANS.forEach(t=>{
+    const s = techState[t.id];
+    cols[s.col].push({...t,state:s});
+  });
+
+  document.getElementById('count-available').textContent = cols.available.length;
+  document.getElementById('count-pause1').textContent = cols.pause1.length;
+  document.getElementById('count-pause2').textContent = cols.pause2.length;
+
+  renderColumn('col-available', cols.available, 'available');
+  renderColumn('col-pause1', cols.pause1, 'pause1');
+  renderColumn('col-pause2', cols.pause2, 'pause2');
+}
+
+function renderColumn(elId, techs, colType){
+  const el = document.getElementById(elId);
+  const inPause = countInPause();
+  const full = inPause >= maxTokens;
+
+  if(techs.length===0){
+    el.innerHTML = `<div class="log-empty">Aucun technicien</div>`;
+    return;
+  }
+  el.innerHTML = techs.map(t=>{
+    const s = t.state;
+    let nextBtn='', backBtn='';
+
+    if(colType==='available'){
+      // can go to pause1 only if pause1 not yet done AND not full
+      const hasPause1 = s.pause1Time!==null;
+      const hasPause2 = s.pause2Time!==null;
+      // next destination: pause1 if not done, else pause2 if pause1 done but not pause2
+      const canGoNext = !hasPause1 || (hasPause1&&!hasPause2);
+      const btnClass = full ? 'action-btn blocked' : 'action-btn next';
+      const btnTitle = full ? 'Quota atteint' : hasPause1 ? 'Prendre pause 2' : 'Prendre pause 1';
+      nextBtn = canGoNext ? `<button class="${btnClass}" onclick="moveTech(${t.id},'forward')" title="${btnTitle}" ${full&&canGoNext?'':''}>${full?'🚫':'▶'}</button>` : '';
+    } else if(colType==='pause1'){
+      nextBtn = `<button class="action-btn next" onclick="moveTech(${t.id},'forward')" title="Terminer pause 1">✔</button>`;
+      backBtn = `<button class="action-btn back" onclick="moveTech(${t.id},'back')" title="Annuler">↩</button>`;
+    } else if(colType==='pause2'){
+      nextBtn = `<button class="action-btn next" onclick="moveTech(${t.id},'forward')" title="Terminer pause 2">✔</button>`;
+      backBtn = `<button class="action-btn back" onclick="moveTech(${t.id},'back')" title="Annuler">↩</button>`;
+    }
+
+    const timeLabel = colType==='pause1' && s.pause1Time ? `depuis ${s.pause1Time}` :
+                      colType==='pause2' && s.pause2Time ? `depuis ${s.pause2Time}` :
+                      s.pause1Time && s.pause2Time ? `P1✓ P2✓` :
+                      s.pause1Time ? `Pause 1 faite` : '';
+
+    return `
+      <div class="tech-card" id="tc-${t.id}">
+        <div class="tech-avatar" style="background:${t.color}">${getInitials(t.name)}</div>
+        <div class="tech-info">
+          <div class="tech-name">${t.name}</div>
+          ${timeLabel?`<div class="tech-time">${timeLabel}</div>`:''}
+        </div>
+        <div class="tech-actions">${backBtn}${nextBtn}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderLog(){
+  const el = document.getElementById('log-body');
+  if(log.length===0){
+    el.innerHTML = `<div class="log-empty">Aucun mouvement enregistré.</div>`;
+    return;
+  }
+  el.innerHTML = log.map(e=>`
+    <div class="log-entry">
+      <span class="log-time">${e.time}</span>
+      <span>${e.msg}</span>
+    </div>`).join('');
+}
+
+// ── ACTIONS ──────────────────────────────────────────────────────────────────
+function moveTech(id, direction){
+  const t = TECHNICIANS.find(x=>x.id===id);
+  const s = techState[id];
+  const inPause = countInPause();
+
+  if(direction==='forward'){
+    if(s.col==='available'){
+      // check if full
+      if(inPause >= maxTokens){
+        showToast(`❌ Quota atteint ! Max ${maxTokens} pause(s) simultanée(s) autorisée(s).`, 'error');
+        return;
+      }
+      if(s.pause1Time===null){
+        // go to pause1
+        s.col='pause1';
+        s.pause1Time=nowStr();
+        addLog(`${t.name} → Pause 1 (${s.pause1Time})`);
+        showToast(`${t.name} est en Pause 1 ☕`, 'success');
+      } else if(s.pause2Time===null){
+        // go to pause2
+        s.col='pause2';
+        s.pause2Time=nowStr();
+        addLog(`${t.name} → Pause 2 (${s.pause2Time})`);
+        showToast(`${t.name} est en Pause 2 🍵`, 'success');
+      }
+    } else if(s.col==='pause1'){
+      s.col='available';
+      addLog(`${t.name} ← Retour (fin Pause 1)`);
+      showToast(`${t.name} est de retour ✅`, 'success');
+    } else if(s.col==='pause2'){
+      s.col='available';
+      addLog(`${t.name} ← Retour (fin Pause 2)`);
+      showToast(`${t.name} est de retour ✅`, 'success');
+    }
+  } else { // back
+    if(s.col==='pause1'){
+      s.col='available';
+      s.pause1Time=null;
+      addLog(`${t.name} ↩ Pause 1 annulée`);
+    } else if(s.col==='pause2'){
+      s.col='available';
+      s.pause2Time=null;
+      addLog(`${t.name} ↩ Pause 2 annulée`);
+    }
+  }
+  renderAll();
+  _broadcastState();
+}
+
+
+// ── SYNC LOCAL (BroadcastChannel — même poste, multi-onglets) ────────────────
+var _syncCh = null;
+var _syncing = false;
+
+try {
+  _syncCh = new BroadcastChannel('pauseboard-sync-v2');
+  _syncCh.onmessage = function(e) {
+    if(!e.data || _syncing) return;
+    var d = e.data;
+    if(d.type === 'FULL_STATE') {
+      _syncing = true;
+      maxTokens = d.maxTokens;
+      currentPeriod = d.currentPeriod;
+      techState = d.techState;
+      log = d.log || [];
+      if(d.technicians && d.technicians.length) {
+        TECHNICIANS.length = 0;
+        d.technicians.forEach(function(t){ TECHNICIANS.push(t); });
+      }
+      if(IS_PILOT) {
+        document.getElementById('max-tokens-display').textContent = maxTokens;
+        document.getElementById('period-select').value = currentPeriod;
+      }
+      renderAll();
+      _syncing = false;
+    }
+  };
+} catch(ex) {
+  console.warn('BroadcastChannel non disponible');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SHAREPOINT SYNC — remplace BroadcastChannel pour multi-postes
+// ══════════════════════════════════════════════════════════════════
+var SP_SITE    = 'https://helpline.sharepoint.com/sites/CATS-GOUV-REF';
+var SP_LIST    = 'PauseBoardState';
+var SP_API     = SP_SITE + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items";
+var _spHeaders = { 'Accept': 'application/json;odata=nometadata', 'Content-Type': 'application/json;odata=nometadata' };
+var _spItemId  = null;   // ID du premier (et seul) item de la liste
+var _spPollTimer = null;
+var _spLastEtag  = '';
+var _spWriting   = false;
+
+function _spFetch(url, opts) {
+  opts = opts || {};
+  opts.credentials = 'include';
+  opts.headers = Object.assign({}, _spHeaders, opts.headers || {});
+  return fetch(url, opts);
+}
+
+// Lit l'état depuis SharePoint
+function _spRead(callback) {
+  _spFetch(SP_API + '?$select=Id,Title,State&$top=1')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var items = data.value || [];
+      if(items.length === 0) {
+        // Liste vide : créer le premier item
+        _spItemId = null;
+        _spWrite(true);
+        return;
+      }
+      var item = items[0];
+      _spItemId = item.Id;
+      var etag = item.__metadata ? item.__metadata.etag : item.Id;
+      if(etag === _spLastEtag) return; // rien de nouveau
+      _spLastEtag = etag || item.Id;
+      if(item.State) {
+        try {
+          var d = JSON.parse(item.State);
+          _spApplyState(d);
+          if(callback) callback();
+        } catch(ex) { console.warn('SP parse error', ex); }
+      }
+    })
+    .catch(function(ex) { console.warn('SP read error', ex); });
+}
+
+// Écrit l'état dans SharePoint
+function _spWrite(force) {
+  if(_spWriting && !force) return;
+  _spWriting = true;
+  var payload = JSON.stringify({
+    Title: 'state',
+    State: JSON.stringify({
+      maxTokens: maxTokens,
+      currentPeriod: currentPeriod,
+      techState: techState,
+      log: log.slice(0, 60),
+      technicians: TECHNICIANS.map(function(t) { return Object.assign({}, t); }),
+      updatedAt: Date.now()
+    })
+  });
+
+  if(_spItemId) {
+    // PATCH item existant
+    _spFetch(SP_API + '(' + _spItemId + ')', {
+      method: 'POST',
+      headers: { 'X-HTTP-Method': 'MERGE', 'IF-MATCH': '*' },
+      body: payload
+    })
+    .then(function() { _spWriting = false; })
+    .catch(function(ex) { console.warn('SP write error', ex); _spWriting = false; });
+  } else {
+    // POST nouvel item
+    _spFetch(SP_API, { method: 'POST', body: payload })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { _spItemId = d.Id || d.id; _spWriting = false; })
+    .catch(function(ex) { console.warn('SP create error', ex); _spWriting = false; });
+  }
+}
+
+// Applique un état reçu de SP sans reboucler
+function _spApplyState(d) {
+  var _prev = _syncing;
+  _syncing = true;
+  if(d.maxTokens !== undefined) maxTokens = d.maxTokens;
+  if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
+  if(d.techState !== undefined) techState = d.techState;
+  if(d.log !== undefined) log = d.log;
+  if(d.technicians && d.technicians.length) {
+    TECHNICIANS.length = 0;
+    d.technicians.forEach(function(t) { TECHNICIANS.push(t); });
+  }
+  if(IS_PILOT) {
+    var el = document.getElementById('max-tokens-display');
+    if(el) el.textContent = maxTokens;
+    var sel = document.getElementById('period-select');
+    if(sel) sel.value = currentPeriod;
+  }
+  renderAll();
+  _syncing = _prev;
+}
+
+// Démarre le polling (toutes les 5s)
+function _spStartPolling() {
+  _spRead();
+  _spPollTimer = setInterval(_spRead, 5000);
+}
+
+// Broadcast = écriture SP
+function _broadcastState() {
+  if(_syncing) return;
+  _spWrite();
+  // Aussi BroadcastChannel local si dispo (même poste, multi-onglets)
+  if(_syncCh) {
+    try {
+      _syncCh.postMessage({
+        type: 'FULL_STATE',
+        maxTokens: maxTokens,
+        currentPeriod: currentPeriod,
+        techState: JSON.parse(JSON.stringify(techState)),
+        log: log.slice(0, 60),
+        technicians: TECHNICIANS.map(function(t) { return Object.assign({}, t); })
+      });
+    } catch(ex) {}
+  }
+}
+
+
+
+// ── CONTROLS ─────────────────────────────────────────────────────────────────
+document.getElementById('inc-tokens').addEventListener('click',()=>{
+  if(maxTokens<TECHNICIANS.length){ maxTokens++; document.getElementById('max-tokens-display').textContent=maxTokens; renderAll(); _broadcastState(); }
+});
+document.getElementById('dec-tokens').addEventListener('click',()=>{
+  if(maxTokens>1){ maxTokens--; document.getElementById('max-tokens-display').textContent=maxTokens; renderAll(); _broadcastState(); }
+});
+document.getElementById('period-select').addEventListener('change',e=>{
+  currentPeriod=e.target.value;
+  renderAll();
+  _broadcastState();
+});
+document.getElementById('reset-btn').addEventListener('click',()=>{
+  if(!confirm('Réinitialiser toutes les pauses du créneau ?')) return;
+  TECHNICIANS.forEach(t=>{
+    techState[t.id]={col:'available',pause1Time:null,pause2Time:null};
+  });
+  addLog(`--- Réinitialisation complète (${nowStr()}) ---`);
+  showToast('Pauses réinitialisées', 'success');
+  renderAll();
+  _broadcastState();
+});
+document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
+
+
+// ── REFRESH BUTTON ────────────────────────────────────────────────────────────
+document.getElementById('refresh-btn').addEventListener('click', function() {
+  var btn = this;
+  btn.style.animation = 'spin 0.6s ease';
+  setTimeout(function(){ btn.style.animation = ''; }, 650);
+  _spRead(function(){ showToast('Données actualisées ✓', 'success'); });
+});
+
+// ── CLOCK ────────────────────────────────────────────────────────────────────
+function updateClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+updateClock();
+setInterval(updateClock, 10000);
+
+// ── THEME ────────────────────────────────────────────────────────────────────
+(function(){
+  const t=document.querySelector('[data-theme-toggle]');
+  const r=document.documentElement;
+  let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  r.setAttribute('data-theme',d);
+  t&&t.addEventListener('click',()=>{
+    d=d==='dark'?'light':'dark';
+    r.setAttribute('data-theme',d);
+    t.setAttribute('aria-label','Changer le thème');
+    t.innerHTML=d==='dark'
+      ?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+      :'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  });
+})();
+
+
+// ── CODES D'ACCÈS (modifiez ici) ─────────────────────────────────────────────
+var PILOT_CODE = '1234';
+var TECH_CODE  = 'tech';
+var IS_PILOT   = false;
+
+// ── LOCK SCREEN ───────────────────────────────────────────────────────────────
+(function(){
+  var inp   = document.getElementById('lock-input');
+  var errEl = document.getElementById('lock-error');
+  var eye   = document.getElementById('lock-eye');
+  var btn   = document.getElementById('lock-submit');
+
+  eye.addEventListener('click', function(){
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+
+  function tryLogin(){
+    var v = inp.value.trim();
+    errEl.textContent = '';
+    inp.classList.remove('shake');
+    if(v === PILOT_CODE){
+      IS_PILOT = true;
+      unlock();
+    } else if(v === TECH_CODE){
+      IS_PILOT = false;
+      unlock();
+    } else {
+      inp.classList.add('shake');
+      errEl.textContent = 'Code incorrect, veuillez r\u00e9essayer.';
+      setTimeout(function(){ inp.classList.remove('shake'); }, 400);
+      inp.value = '';
+      inp.focus();
+    }
+  }
+
+  function unlock(){
+    document.getElementById('lock-screen').style.display = 'none';
+    var badge = document.getElementById('role-badge');
+    if(badge) badge.textContent = IS_PILOT ? 'Pilote' : 'Technicien';
+    var pilotPanel = document.querySelector('.pilot-panel');
+    if(pilotPanel) pilotPanel.style.display = IS_PILOT ? '' : 'none';
+    // Journal visible uniquement pour le pilote
+    var logPanel = document.getElementById('log-panel');
+    if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
+    // Démarrer la synchronisation SharePoint
+    _spStartPolling();
+  }
+
+  btn.addEventListener('click', tryLogin);
+  inp.addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+})();
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>
