@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.2</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.3</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -390,7 +390,8 @@ function getInitials(name){
   return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
 }
 function countInPause(){
-  return Object.values(techState).filter(s=>s.col==='pause1'||s.col==='pause2').length;
+  const activeTechIds = new Set(TECHNICIANS.map(t=>t.id));
+  return Object.entries(techState).filter(([id,s])=>activeTechIds.has(parseInt(id))&&(s.col==='pause1'||s.col==='pause2')).length;
 }
 function addLog(msg){
   log.unshift({time:nowStr(),msg});
@@ -420,9 +421,11 @@ function renderAll(){
 
 function renderStats(){
   const inPause = countInPause();
-  const available = Object.values(techState).filter(s=>s.col==='available').length;
-  const p1done = Object.values(techState).filter(s=>s.pause1Time!==null).length;
-  const p2done = Object.values(techState).filter(s=>s.pause2Time!==null).length;
+  const activeTechIds = new Set(TECHNICIANS.map(t=>t.id));
+  const activeTechStates = Object.entries(techState).filter(([id])=>activeTechIds.has(parseInt(id))).map(([,s])=>s);
+  const available = activeTechStates.filter(s=>s.col==='available').length;
+  const p1done = activeTechStates.filter(s=>s.pause1Time!==null).length;
+  const p2done = activeTechStates.filter(s=>s.pause2Time!==null).length;
   const remaining = maxTokens - inPause;
   document.getElementById('stats-row').innerHTML = `
     <div class="stat-card">
