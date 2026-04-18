@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.5</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.6</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -1032,34 +1032,56 @@ function _processURLAgents(){
       sessionStorage.setItem('pb_agents', raw);
       sessionStorage.setItem('pb_agents_refresh', raw);
       window.history.replaceState({},'',window.location.pathname);
-      // Si pilote déjà connecté : actualiser directement
-      if(IS_PILOT){
-        setTimeout(function(){
-          try {
-            var names=JSON.parse(decodeURIComponent(raw));
-            if(!Array.isArray(names)||names.length===0) return;
-            sessionStorage.removeItem('pb_agents_refresh');
-            if(TECHNICIANS.length===0){
-              _applyAgentList(names);
-              addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
-              showToast(names.length+' agents importés ✅','success');
-            } else {
-              var result=_mergeAgentList(names);
-              var msg='Actualisation : +'+result.added+' arrivée(s), -'+result.removed+' départ(s)';
-              addLog('--- '+msg+' ('+nowStr()+') ---');
-              showToast(msg,'success');
-            }
-            buildTechCodes();
-            renderAll();
-            TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
-            _broadcastState();
-            sessionStorage.removeItem('pb_agents');
-          } catch(ex){}
-        }, 300);
-      }
     }
   } catch(e){}
 }
+
+// Applique une liste de noms (import ou actualisation) si pilote connecté
+function _applyIncomingNames(names){
+  if(!IS_PILOT || !Array.isArray(names) || names.length===0) return;
+  if(TECHNICIANS.length===0){
+    _applyAgentList(names);
+    addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
+    showToast(names.length+' agents importés ✅','success');
+  } else {
+    var result=_mergeAgentList(names);
+    var msg='Actualisation : +'+result.added+' arrivée(s), -'+result.removed+' départ(s)';
+    addLog('--- '+msg+' ('+nowStr()+') ---');
+    showToast(msg+' ✅','success');
+  }
+  buildTechCodes();
+  renderAll();
+  TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
+  _broadcastState();
+}
+
+// Écoute localStorage : le bookmarklet écrit 'pb_bm_agents' depuis Brightmetrics
+window.addEventListener('storage', function(e){
+  if(e.key === 'pb_bm_agents' && e.newValue){
+    try {
+      var d = JSON.parse(e.newValue);
+      if(d && Array.isArray(d.names) && d.names.length > 0){
+        localStorage.removeItem('pb_bm_agents');
+        _applyIncomingNames(d.names);
+      }
+    } catch(ex){}
+  }
+});
+
+// Vérifier aussi au chargement si des données sont déjà en attente dans localStorage
+(function(){
+  try {
+    var pending = localStorage.getItem('pb_bm_agents');
+    if(pending){
+      localStorage.removeItem('pb_bm_agents');
+      var d = JSON.parse(pending);
+      if(d && Array.isArray(d.names)){
+        sessionStorage.setItem('pb_agents', encodeURIComponent(JSON.stringify(d.names)));
+        sessionStorage.setItem('pb_agents_refresh', encodeURIComponent(JSON.stringify(d.names)));
+      }
+    }
+  } catch(ex){}
+})();
 
 // Charge les agents depuis sessionStorage si disponible
 function _loadSessionAgents(){
@@ -1137,13 +1159,11 @@ _processURLAgents();
     // Forcer une lecture fraîche à la connexion
     _fbLastHash = '';
     // Si pilote : charger agents Brightmetrics depuis sessionStorage si disponible
-    var _sessionImported = false;
     if(IS_PILOT && _loadSessionAgents()){
       buildTechCodes();
       showToast(TECHNICIANS.length+' agents Brightmetrics chargés ✅','success');
       sessionStorage.removeItem('pb_agents');
-      _sessionImported = true;
-      // Écrire immédiatement dans Firebase AVANT de relire
+      sessionStorage.removeItem('pb_agents_refresh');
       _fbWriteConfig();
       TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
     }
