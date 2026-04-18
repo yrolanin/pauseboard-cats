@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.9</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.10</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -826,6 +826,19 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
 document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
 
 document.getElementById('import-btn').addEventListener('click',()=>{
+  // Si des agents ont déjà été chargés (via URL bookmarklet), on les utilise directement
+  if(TECHNICIANS.length > 0 && typeof _importedFromURL !== 'undefined' && _importedFromURL){
+    var names = TECHNICIANS.map(function(t){ return t.name; });
+    if(!confirm('Appliquer la liste importée depuis Brightmetrics ?\n\n'+names.join('\n'))) return;
+    addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
+    showToast(names.length+' agents importés depuis Brightmetrics','success');
+    renderAll();
+    TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
+    _broadcastState();
+    _importedFromURL = false;
+    return;
+  }
+  // Sinon, demander l'URL manuellement
   var url = prompt('Collez ici l\'URL générée par le bookmarklet Brightmetrics\n(ou laissez vide pour annuler) :');
   if(!url) return;
   try {
@@ -847,8 +860,17 @@ document.getElementById('import-btn').addEventListener('click',()=>{
 // Chargement automatique depuis URL ?agents= (ouverture via bookmarklet)
 (function(){
   if(_loadFromURL()){
-    // Les agents sont chargés, on attend que le pilote se connecte pour broadcaster
     console.log('Agents chargés depuis URL : '+TECHNICIANS.length+' tech');
+    // Afficher un badge sur le bouton importer pour signaler que des agents sont prêts
+    setTimeout(function(){
+      var btn = document.getElementById('import-btn');
+      if(btn) {
+        btn.style.background = 'var(--color-primary)';
+        btn.style.color = '#fff';
+        btn.style.borderColor = 'var(--color-primary)';
+        btn.title = TECHNICIANS.length + ' agents prêts à importer depuis Brightmetrics';
+      }
+    }, 500);
   }
 })();
 
@@ -920,6 +942,7 @@ function _applyAgentList(names){
 }
 
 // Lit le paramètre ?agents= dans l'URL et peuple la liste
+var _importedFromURL = false;
 function _loadFromURL(){
   try {
     var params=new URLSearchParams(window.location.search);
@@ -928,6 +951,7 @@ function _loadFromURL(){
     var names=JSON.parse(decodeURIComponent(raw));
     if(!Array.isArray(names)||names.length===0) return false;
     _applyAgentList(names);
+    _importedFromURL = true;
     // Nettoyer l'URL sans recharger la page
     var clean=window.location.pathname;
     window.history.replaceState({},'',clean);
