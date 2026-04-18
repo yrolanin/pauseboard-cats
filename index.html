@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.8</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.9</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -291,7 +291,7 @@ input,select{font:inherit;color:inherit}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
           Réinitialiser les pauses
         </button>
-        <button class="reset-btn" id="import-btn" title="Importer la liste depuis Brightmetrics (via bookmarklet)">
+        <button class="reset-btn" id="import-btn" title="Importer la liste depuis Brightmetrics">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v13"/><path d="m5 9 7 7 7-7"/><rect x="3" y="18" width="18" height="3" rx="1"/></svg>
           Importer agents Brightmetrics
         </button>
@@ -826,31 +826,31 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
 document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
 
 document.getElementById('import-btn').addEventListener('click',()=>{
-  var stored = localStorage.getItem('pauseboard_agents');
-  if(!stored){
-    alert('Aucune liste trouvée dans le navigateur.\n\nUtilisez d\'abord le bookmarklet depuis la page Brightmetrics, puis revenez ici.');
-    return;
-  }
+  var url = prompt('Collez ici l\'URL générée par le bookmarklet Brightmetrics\n(ou laissez vide pour annuler) :');
+  if(!url) return;
   try {
-    var names = JSON.parse(stored);
-    if(!Array.isArray(names) || names.length === 0){ alert('Liste vide ou invalide.'); return; }
-    if(!confirm('Importer ' + names.length + ' agents depuis Brightmetrics ?\n\n' + names.join('\n'))) return;
-    TECHNICIANS.length = 0;
-    names.forEach(function(name, i){
-      TECHNICIANS.push({id: i+1, name: name, color: AVATAR_COLORS[i % AVATAR_COLORS.length]});
-    });
-    techState = {};
-    TECHNICIANS.forEach(function(t){
-      techState[t.id] = {col:'available', pause1Time:null, pause2Time:null};
-    });
-    buildTechCodes();
-    addLog('--- Import Brightmetrics : ' + names.length + ' agents (' + nowStr() + ') ---');
-    showToast(names.length + ' agents importés depuis Brightmetrics', 'success');
+    var params = new URLSearchParams(url.split('?')[1]||url);
+    var raw = params.get('agents');
+    if(!raw){ alert('Paramètre agents introuvable dans l\'URL.'); return; }
+    var names = JSON.parse(decodeURIComponent(raw));
+    if(!Array.isArray(names)||names.length===0){ alert('Liste vide.'); return; }
+    if(!confirm('Importer '+names.length+' agents ?\n\n'+names.join('\n'))) return;
+    _applyAgentList(names);
+    addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
+    showToast(names.length+' agents importés depuis Brightmetrics','success');
     renderAll();
     TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
     _broadcastState();
-  } catch(e){ alert('Erreur lors de l\'import : ' + e.message); }
+  } catch(e){ alert('Erreur : '+e.message); }
 });
+
+// Chargement automatique depuis URL ?agents= (ouverture via bookmarklet)
+(function(){
+  if(_loadFromURL()){
+    // Les agents sont chargés, on attend que le pilote se connecte pour broadcaster
+    console.log('Agents chargés depuis URL : '+TECHNICIANS.length+' tech');
+  }
+})();
 
 
 // ── REFRESH BUTTON ────────────────────────────────────────────────────────────
@@ -895,33 +895,42 @@ var TECH_CODES   = {};
 var AVATAR_COLORS = ['#01696f','#da7101','#7a39bb','#964219','#437a22','#006494','#a12c7b','#d19900','#c0392b','#16a085','#8e44ad','#2980b9','#27ae60','#e67e22','#e74c3c','#1abc9c','#f39c12','#2ecc71','#3498db','#9b59b6','#e91e63','#ff5722','#607d8b','#795548','#ff9800','#4caf50','#2196f3','#9c27b0','#f44336','#009688','#673ab7','#3f51b5','#00bcd4','#8bc34a','#cddc39','#ffc107','#ff5252','#69f0ae','#40c4ff','#e040fb','#ffab40','#b9f6ca','#80d8ff','#ea80fc','#ccff90','#ff6e40','#ffe57f','#84ffff','#a7ffeb','#cfd8dc'];
 
 function _makeCode(fullName){
-  var parts = fullName.trim().split(/\s+/);
-  if(parts.length < 2) return fullName.toLowerCase().replace(/[^a-z0-9]/g,'');
-  var code = (parts[0][0] + parts.slice(1).join('')).toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  var parts=fullName.trim().split(/\s+/);
+  if(parts.length<2) return fullName.toLowerCase().replace(/[^a-z0-9]/g,'');
+  var code=(parts[0][0]+parts.slice(1).join('')).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
   return code;
 }
 
 function buildTechCodes(){
-  TECH_CODES = {};
-  TECHNICIANS.forEach(function(t){ TECH_CODES[_makeCode(t.name)] = t.name; });
+  TECH_CODES={};
+  TECHNICIANS.forEach(function(t){ TECH_CODES[_makeCode(t.name)]=t.name; });
 }
 
-function _loadImportedTechs(){
+function _applyAgentList(names){
+  TECHNICIANS.length=0;
+  names.forEach(function(name,i){
+    TECHNICIANS.push({id:i+1,name:name,color:AVATAR_COLORS[i%AVATAR_COLORS.length]});
+  });
+  techState={};
+  TECHNICIANS.forEach(function(t){
+    techState[t.id]={col:'available',pause1Time:null,pause2Time:null};
+  });
+  buildTechCodes();
+}
+
+// Lit le paramètre ?agents= dans l'URL et peuple la liste
+function _loadFromURL(){
   try {
-    var stored = localStorage.getItem('pauseboard_agents');
-    if(!stored) return false;
-    var names = JSON.parse(stored);
-    if(!Array.isArray(names) || names.length === 0) return false;
-    TECHNICIANS.length = 0;
-    names.forEach(function(name, i){
-      TECHNICIANS.push({id: i+1, name: name, color: AVATAR_COLORS[i % AVATAR_COLORS.length]});
-    });
-    techState = {};
-    TECHNICIANS.forEach(function(t){
-      techState[t.id] = {col:'available', pause1Time:null, pause2Time:null};
-    });
-    buildTechCodes();
+    var params=new URLSearchParams(window.location.search);
+    var raw=params.get('agents');
+    if(!raw) return false;
+    var names=JSON.parse(decodeURIComponent(raw));
+    if(!Array.isArray(names)||names.length===0) return false;
+    _applyAgentList(names);
+    // Nettoyer l'URL sans recharger la page
+    var clean=window.location.pathname;
+    window.history.replaceState({},'',clean);
     return true;
   } catch(e){ return false; }
 }
@@ -969,8 +978,6 @@ function _loadImportedTechs(){
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
     // Forcer une lecture fraîche à la connexion
     _fbLastHash = '';
-    // Charger les agents importés depuis Brightmetrics si disponible
-    if(IS_PILOT) { _loadImportedTechs(); }
     // Lecture immédiate Firebase puis démarrage du polling
     _fbRead(function() {
       // Callback après chargement initial : pilote écrit son état
