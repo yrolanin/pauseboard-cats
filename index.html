@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.14</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.15</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -901,8 +901,14 @@ function buildTechCodes(){
 }
 
 function _applyAgentList(names){
+  // Tri alphabétique par prénom
+  var sorted = names.slice().sort(function(a,b){
+    var pa=a.trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    var pb=b.trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return pa<pb?-1:pa>pb?1:0;
+  });
   TECHNICIANS.length=0;
-  names.forEach(function(name,i){
+  sorted.forEach(function(name,i){
     TECHNICIANS.push({id:i+1,name:name,color:AVATAR_COLORS[i%AVATAR_COLORS.length]});
   });
   techState={};
