@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>PauseBoard Relay</title></head>
+<body>
+<script>
+(function(){
+  try {
+    var hash = window.location.hash.slice(1);
+    var params = new URLSearchParams(hash);
+    var raw = params.get('agents');
+    if(raw){
+      var names = JSON.parse(decodeURIComponent(raw));
+      localStorage.setItem('pb_bm_agents', JSON.stringify({names:names, ts:Date.now()}));
+    }
+  } catch(e){}
+  window.close();
+})();
+</script>
+<p style="font-family:sans-serif;padding:20px">Transfert en cours... Cette fenêtre va se fermer.</p>
+</body>
+</html>

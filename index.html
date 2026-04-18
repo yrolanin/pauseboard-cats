@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.7</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.8</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -1055,18 +1055,18 @@ function _applyIncomingNames(names){
   _broadcastState();
 }
 
-// Écoute localStorage : le bookmarklet écrit 'pb_bm_agents' depuis Brightmetrics
-window.addEventListener('storage', function(e){
-  if(e.key === 'pb_bm_agents' && e.newValue){
-    try {
-      var d = JSON.parse(e.newValue);
-      if(d && Array.isArray(d.names) && d.names.length > 0){
-        localStorage.removeItem('pb_bm_agents');
-        _applyIncomingNames(d.names);
-      }
-    } catch(ex){}
-  }
-});
+// Polling localStorage toutes les 2s : le bookmarklet écrit 'pb_bm_agents'
+setInterval(function(){
+  try {
+    var raw = localStorage.getItem('pb_bm_agents');
+    if(!raw) return;
+    localStorage.removeItem('pb_bm_agents');
+    var d = JSON.parse(raw);
+    if(d && Array.isArray(d.names) && d.names.length > 0){
+      _applyIncomingNames(d.names);
+    }
+  } catch(ex){}
+}, 2000);
 
 // Vérifier aussi au chargement si des données sont déjà en attente dans localStorage
 (function(){
