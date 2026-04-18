@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.13</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.14</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -983,10 +983,15 @@ _processURLAgents();
     // Forcer une lecture fraîche à la connexion
     _fbLastHash = '';
     // Si pilote : charger agents Brightmetrics depuis sessionStorage si disponible
+    var _sessionImported = false;
     if(IS_PILOT && _loadSessionAgents()){
       buildTechCodes();
       showToast(TECHNICIANS.length+' agents Brightmetrics chargés ✅','success');
       sessionStorage.removeItem('pb_agents');
+      _sessionImported = true;
+      // Écrire immédiatement dans Firebase AVANT de relire
+      _fbWriteConfig();
+      TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
     }
     // Lecture immédiate Firebase puis démarrage du polling
     _fbRead(function() {
