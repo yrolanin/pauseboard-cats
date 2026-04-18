@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.4</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.5</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -1029,9 +1029,34 @@ function _processURLAgents(){
     var params=new URLSearchParams(window.location.search);
     var raw=params.get('agents');
     if(raw){
-      sessionStorage.setItem('pb_agents', raw);         // pour login auto
-      sessionStorage.setItem('pb_agents_refresh', raw); // pour bouton actualiser
+      sessionStorage.setItem('pb_agents', raw);
+      sessionStorage.setItem('pb_agents_refresh', raw);
       window.history.replaceState({},'',window.location.pathname);
+      // Si pilote déjà connecté : actualiser directement
+      if(IS_PILOT){
+        setTimeout(function(){
+          try {
+            var names=JSON.parse(decodeURIComponent(raw));
+            if(!Array.isArray(names)||names.length===0) return;
+            sessionStorage.removeItem('pb_agents_refresh');
+            if(TECHNICIANS.length===0){
+              _applyAgentList(names);
+              addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
+              showToast(names.length+' agents importés ✅','success');
+            } else {
+              var result=_mergeAgentList(names);
+              var msg='Actualisation : +'+result.added+' arrivée(s), -'+result.removed+' départ(s)';
+              addLog('--- '+msg+' ('+nowStr()+') ---');
+              showToast(msg,'success');
+            }
+            buildTechCodes();
+            renderAll();
+            TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
+            _broadcastState();
+            sessionStorage.removeItem('pb_agents');
+          } catch(ex){}
+        }, 300);
+      }
     }
   } catch(e){}
 }
@@ -1050,29 +1075,6 @@ function _loadSessionAgents(){
 
 // Appel immédiat au chargement de la page
 _processURLAgents();
-
-// Écoute BroadcastChannel : reçoit la liste depuis le bookmarklet sans ouvrir de nouvelle page
-(function(){
-  try {
-    var bc = new BroadcastChannel('pb_brightmetrics');
-    bc.onmessage = function(e){
-      if(e.data && e.data.type === 'agents' && Array.isArray(e.data.names)){
-        var raw = encodeURIComponent(JSON.stringify(e.data.names));
-        sessionStorage.setItem('pb_agents', raw);
-        sessionStorage.setItem('pb_agents_refresh', raw);
-        // Si pilote connecté : montrer badge sur le bouton
-        var btn = document.getElementById('import-btn');
-        if(btn){
-          btn.style.background = 'var(--color-primary)';
-          btn.style.color = '#fff';
-          btn.style.borderColor = 'var(--color-primary)';
-          btn.textContent = '✅ ' + e.data.names.length + ' agents reçus — Cliquez pour actualiser';
-        }
-        showToast(e.data.names.length + ' agents reçus depuis Brightmetrics — cliquez "Actualiser" !', 'success');
-      }
-    };
-  } catch(ex){}
-})();
 
 // Lecture anticipée de Firebase pour construire TECH_CODES avant la connexion tech
 (function _fbPreloadTechCodes(){
