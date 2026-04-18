@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.5</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.7</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -501,7 +501,6 @@ function renderColumn(elId, techs, colType){
   el.innerHTML = techs.map(t=>{
     const s = t.state;
     let nextBtn='', backBtn='';
-    // En mode tech, seul le tech connecté peut interagir avec sa propre ligne
     const canInteract = IS_PILOT || (CURRENT_TECH !== null && t.name === CURRENT_TECH);
 
     if(colType==='available'){
@@ -816,6 +815,8 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
   addLog(`--- Réinitialisation complète (${nowStr()}) ---`);
   showToast('Pauses réinitialisées', 'success');
   renderAll();
+  // Écrire chaque tech dans Firebase pour écraser les anciennes données
+  TECHNICIANS.forEach(t=>{ _fbWriteTech(t.id); });
   _broadcastState();
 });
 document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
