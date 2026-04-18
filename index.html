@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.1</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.2</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -293,7 +293,7 @@ input,select{font:inherit;color:inherit}
         </button>
         <button class="reset-btn" id="import-btn" title="Importer la liste depuis Brightmetrics">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v13"/><path d="m5 9 7 7 7-7"/><rect x="3" y="18" width="18" height="3" rx="1"/></svg>
-          Importer agents Brightmetrics
+          Actualiser agents Brightmetrics
         </button>
       </div>
     </section>
@@ -830,19 +830,34 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
 document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
 
 document.getElementById('import-btn').addEventListener('click',()=>{
-  var url = prompt('Collez ici l\'URL générée par le bookmarklet Brightmetrics\n(ou laissez vide pour annuler) :');
-  if(!url) return;
+  // Si agents chargés depuis sessionStorage (bookmarklet), actualiser directement
+  var raw = sessionStorage.getItem('pb_agents_refresh');
+  if(!raw){
+    // Pas de données fraîches : demander de recliquer le bookmarklet
+    alert('Pour actualiser, cliquez d\'abord sur le favori "Importer → PauseBoard" dans Brightmetrics, puis revenez ici et cliquez ce bouton.');
+    return;
+  }
   try {
-    var params = new URLSearchParams(url.split('?')[1]||url);
-    var raw = params.get('agents');
-    if(!raw){ alert('Paramètre agents introuvable dans l\'URL.'); return; }
     var names = JSON.parse(decodeURIComponent(raw));
     if(!Array.isArray(names)||names.length===0){ alert('Liste vide.'); return; }
-    if(!confirm('Importer '+names.length+' agents ?\n\n'+names.join('\n'))) return;
-    _applyAgentList(names);
+    sessionStorage.removeItem('pb_agents_refresh');
+
+    if(TECHNICIANS.length === 0){
+      // Premier import
+      if(!confirm('Importer '+names.length+' agents ?\n\n'+_sortNames(names).join('\n'))) return;
+      _applyAgentList(names);
+      addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
+      showToast(names.length+' agents importés','success');
+    } else {
+      // Actualisation avec merge
+      var preview = 'Actualiser depuis Brightmetrics ?\n\nNouvelle liste ('+names.length+') :\n'+_sortNames(names).join('\n');
+      if(!confirm(preview)) return;
+      var result = _mergeAgentList(names);
+      var msg = 'Actualisation : +'+result.added+' arrivée(s), -'+result.removed+' départ(s)';
+      addLog('--- '+msg+' ('+nowStr()+') ---');
+      showToast(msg,'success');
+    }
     buildTechCodes();
-    addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
-    showToast(names.length+' agents importés depuis Brightmetrics','success');
     renderAll();
     TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
     _broadcastState();
@@ -904,13 +919,17 @@ function buildTechCodes(){
   TECHNICIANS.forEach(function(t){ TECH_CODES[_makeCode(t.name)]=t.name; });
 }
 
-function _applyAgentList(names){
-  // Tri alphabétique par prénom
-  var sorted = names.slice().sort(function(a,b){
+function _sortNames(names){
+  return names.slice().sort(function(a,b){
     var pa=a.trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     var pb=b.trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     return pa<pb?-1:pa>pb?1:0;
   });
+}
+
+// Premier import : crée la liste from scratch
+function _applyAgentList(names){
+  var sorted = _sortNames(names);
   TECHNICIANS.length=0;
   sorted.forEach(function(name,i){
     TECHNICIANS.push({id:i+1,name:name,color:AVATAR_COLORS[i%AVATAR_COLORS.length]});
@@ -922,13 +941,91 @@ function _applyAgentList(names){
   buildTechCodes();
 }
 
+// Actualisation : conserve historique, ajoute nouveaux, retire absents (log conservé)
+function _mergeAgentList(newNames){
+  var sorted = _sortNames(newNames);
+  var existingByName = {};
+  TECHNICIANS.forEach(function(t){ existingByName[t.name] = t; });
+
+  var added = [], removed = [];
+
+  // Détecter les nouveaux
+  sorted.forEach(function(name){
+    if(!existingByName[name]) added.push(name);
+  });
+
+  // Détecter les partis
+  var newSet = {};
+  sorted.forEach(function(n){ newSet[n]=true; });
+  TECHNICIANS.forEach(function(t){
+    if(!newSet[t.name]) removed.push(t.name);
+  });
+
+  // Logger les changements AVANT modification
+  var ts = nowStr();
+  removed.forEach(function(name){
+    var t = existingByName[name];
+    var s = techState[t.id];
+    var detail = '';
+    if(s){
+      if(s.pause1Time) detail += ' | P1: '+s.pause1Time;
+      if(s.pause2Time) detail += ' | P2: '+s.pause2Time;
+    }
+    addLog('⬅ Départ: '+name+detail+' ('+ts+')');
+  });
+  added.forEach(function(name){
+    addLog('➕ Arrivée: '+name+' ('+ts+')');
+  });
+
+  if(added.length===0 && removed.length===0){
+    addLog('🔄 Actualisation Brightmetrics : aucun changement ('+ts+')');
+    return {added:0, removed:0};
+  }
+
+  // Reconstruire TECHNICIANS : garder existants présents + ajouter nouveaux
+  // Trouver le max ID existant
+  var maxId = 0;
+  TECHNICIANS.forEach(function(t){ if(t.id>maxId) maxId=t.id; });
+
+  // Retirer les partis
+  var removedSet = {};
+  removed.forEach(function(n){ removedSet[n]=true; });
+  var kept = TECHNICIANS.filter(function(t){ return !removedSet[t.name]; });
+
+  // Ajouter les nouveaux
+  added.forEach(function(name){
+    maxId++;
+    kept.push({id:maxId, name:name, color:AVATAR_COLORS[(maxId-1)%AVATAR_COLORS.length]});
+  });
+
+  // Retrier par prénom
+  kept.sort(function(a,b){
+    var pa=a.name.trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    var pb=b.name.trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return pa<pb?-1:pa>pb?1:0;
+  });
+
+  TECHNICIANS.length=0;
+  kept.forEach(function(t){ TECHNICIANS.push(t); });
+
+  // techState : init pour les nouveaux seulement
+  added.forEach(function(name){
+    var t = TECHNICIANS.find(function(x){ return x.name===name; });
+    if(t) techState[t.id]={col:'available',pause1Time:null,pause2Time:null};
+  });
+
+  buildTechCodes();
+  return {added:added.length, removed:removed.length};
+}
+
 // Lit ?agents= dans l'URL et le stocke en sessionStorage puis nettoie l'URL
 function _processURLAgents(){
   try {
     var params=new URLSearchParams(window.location.search);
     var raw=params.get('agents');
     if(raw){
-      sessionStorage.setItem('pb_agents', raw);
+      sessionStorage.setItem('pb_agents', raw);         // pour login auto
+      sessionStorage.setItem('pb_agents_refresh', raw); // pour bouton actualiser
       window.history.replaceState({},'',window.location.pathname);
     }
   } catch(e){}
