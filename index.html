@@ -93,8 +93,8 @@ input,select{font:inherit;color:inherit}
 .token-btn{width:36px;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-border);background:var(--color-surface-offset);color:var(--color-text);font-size:var(--text-lg);font-weight:500;display:flex;align-items:center;justify-content:center;transition:background var(--transition),border-color var(--transition),color var(--transition)}
 .token-btn:hover{background:var(--color-surface-dynamic);border-color:var(--color-primary)}
 .token-value{min-width:40px;text-align:center;font-size:var(--text-xl);font-weight:700;color:var(--color-text);font-variant-numeric:tabular-nums}
-.period-select{background:var(--color-surface-offset);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);color:var(--color-text);transition:border-color var(--transition)}
-.period-select:focus{outline:2px solid var(--color-primary);outline-offset:2px;border-color:transparent}
+
+
 .reset-btn{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);border:1px solid var(--color-border);background:var(--color-surface-offset);font-size:var(--text-sm);color:var(--color-text-muted);transition:all var(--transition)}
 .reset-btn:hover{background:var(--color-warning-highlight);color:var(--color-warning);border-color:var(--color-warning)}
 
@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.8</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.9</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -280,33 +280,7 @@ input,select{font:inherit;color:inherit}
             <button class="token-btn" id="inc-tokens" aria-label="Augmenter">+</button>
           </div>
         </div>
-        <div class="control-group">
-          <div class="control-label">Créneau actif</div>
-          <select class="period-select" id="period-select">
-            <option value="matin">☀️ Matin (10h–12h)</option>
-            <option value="aprem">🌤️ Après-midi (14h30–17h30)</option>
-          </select>
-        </div>
-        <button class="reset-btn" id="reset-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          Réinitialiser les pauses
-        </button>
-        <button class="reset-btn" id="import-btn" title="Importer la liste depuis Brightmetrics">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v13"/><path d="m5 9 7 7 7-7"/><rect x="3" y="18" width="18" height="3" rx="1"/></svg>
-          Actualiser agents Brightmetrics
-        </button>
-      </div>
-    </section>
-
-    <!-- STATS -->
-    <div class="stats-row" id="stats-row"></div>
-
-    <!-- TOKEN INDICATOR -->
-    <div class="token-indicator">
-      <div class="token-info">
-        <div class="token-title">Jetons disponibles — <span id="period-label">Matin</span></div>
-        <div class="token-desc">Chaque jeton représente une pause simultanée autorisée</div>
-      </div>
+        
       <div class="token-slots" id="token-slots"></div>
       <div class="token-status" id="token-status">
         <div class="status-dot"></div>
@@ -372,7 +346,6 @@ const TECHNICIANS = [
 ];
 
 let maxTokens = 2;
-let currentPeriod = 'matin';
 let log = [];
 
 // State: techId -> { pause1Time, pause2Time } (null = not yet taken)
@@ -461,8 +434,7 @@ function renderTokenIndicator(){
   const slots = document.getElementById('token-slots');
   const statusEl = document.getElementById('token-status');
   const statusText = document.getElementById('token-status-text');
-  const periodLabel = document.getElementById('period-label');
-  periodLabel.textContent = currentPeriod==='matin'?'Matin (10h–12h)':'Après-midi (14h30–17h30)';
+  
 
   let html = '';
   for(let i=0;i<maxTokens;i++){
@@ -654,10 +626,8 @@ try {
 
 function _applyState(d) {
   _syncing = true;
-  // Pilote garde ses propres maxTokens et currentPeriod
   if(!IS_PILOT) {
     if(d.maxTokens !== undefined)     maxTokens     = d.maxTokens;
-    if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
   }
   // techState : fusionner pour ne pas écraser les états locaux récents
   if(d.technicians && d.technicians.length) {
@@ -681,8 +651,6 @@ function _applyState(d) {
   if(IS_PILOT) {
     var el = document.getElementById('max-tokens-display');
     if(el) el.textContent = maxTokens;
-    var sel = document.getElementById('period-select');
-    if(sel) sel.value = currentPeriod;
   }
   renderAll();
   _syncing = false;
@@ -691,7 +659,6 @@ function _applyState(d) {
 function _statePayload() {
   return {
     maxTokens: maxTokens,
-    currentPeriod: currentPeriod,
     techState: techState,
     log: log.slice(0, 60),
     technicians: TECHNICIANS.map(function(t){ return Object.assign({}, t); }),
@@ -703,7 +670,6 @@ function _statePayload() {
 function _fbWriteConfig() {
   var payload = {
     maxTokens: maxTokens,
-    currentPeriod: currentPeriod,
     log: log.slice(0, 60),
     technicians: TECHNICIANS.map(function(t){ return Object.assign({}, t); }),
     updatedAt: Date.now()
@@ -750,7 +716,6 @@ function _fbRead(callback) {
     // Config (maxTokens, currentPeriod, log, technicians)
     if(data.config) {
       merged.maxTokens     = data.config.maxTokens;
-      merged.currentPeriod = data.config.currentPeriod;
       merged.log           = data.config.log;
       merged.technicians   = data.config.technicians;
       merged.updatedAt     = data.config.updatedAt;
@@ -814,11 +779,7 @@ document.getElementById('inc-tokens').addEventListener('click',()=>{
 document.getElementById('dec-tokens').addEventListener('click',()=>{
   if(maxTokens>1){ maxTokens--; document.getElementById('max-tokens-display').textContent=maxTokens; renderAll(); _broadcastState(); }
 });
-document.getElementById('period-select').addEventListener('change',e=>{
-  currentPeriod=e.target.value;
-  renderAll();
-  _broadcastState();
-});
+
 document.getElementById('reset-btn').addEventListener('click',()=>{
   if(!confirm('Réinitialiser toutes les pauses du créneau ?')) return;
   TECHNICIANS.forEach(t=>{
@@ -832,39 +793,7 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
 });
 document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
 
-document.getElementById('import-btn').addEventListener('click',()=>{
-  // Si agents chargés depuis sessionStorage (bookmarklet), actualiser directement
-  var raw = sessionStorage.getItem('pb_agents_refresh');
-  if(!raw){
-    // Pas de données fraîches : demander de recliquer le bookmarklet
-    alert('Pour actualiser, cliquez d\'abord sur le favori "Importer → PauseBoard" dans Brightmetrics, puis revenez ici et cliquez ce bouton.');
-    return;
-  }
-  try {
-    var names = JSON.parse(decodeURIComponent(raw));
-    if(!Array.isArray(names)||names.length===0){ alert('Liste vide.'); return; }
-    sessionStorage.removeItem('pb_agents_refresh');
 
-    var btn2=document.getElementById('import-btn');
-    if(btn2){btn2.style.background='';btn2.style.color='';btn2.style.borderColor='';btn2.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v13"/><path d="m5 9 7 7 7-7"/><rect x="3" y="18" width="18" height="3" rx="1"/></svg> Actualiser agents Brightmetrics';}
-    if(TECHNICIANS.length === 0){
-      // Premier import
-      if(!confirm('Importer '+names.length+' agents ?\n\n'+_sortNames(names).join('\n'))) return;
-      _applyAgentList(names);
-      addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
-      showToast(names.length+' agents importés','success');
-    } else {
-      // Actualisation avec merge
-      var preview = 'Actualiser depuis Brightmetrics ?\n\nNouvelle liste ('+names.length+') :\n'+_sortNames(names).join('\n');
-      if(!confirm(preview)) return;
-      var result = _mergeAgentList(names);
-      var msg = 'Actualisation : +'+result.added+' arrivée(s), -'+result.removed+' départ(s)';
-      addLog('--- '+msg+' ('+nowStr()+') ---');
-      showToast(msg,'success');
-    }
-    buildTechCodes();
-    renderAll();
-    TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
     _broadcastState();
   } catch(e){ alert('Erreur : '+e.message); }
 });
