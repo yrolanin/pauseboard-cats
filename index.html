@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.12</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.13</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -836,6 +836,7 @@ document.getElementById('import-btn').addEventListener('click',()=>{
     if(!Array.isArray(names)||names.length===0){ alert('Liste vide.'); return; }
     if(!confirm('Importer '+names.length+' agents ?\n\n'+names.join('\n'))) return;
     _applyAgentList(names);
+    buildTechCodes();
     addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
     showToast(names.length+' agents importés depuis Brightmetrics','success');
     renderAll();
@@ -843,23 +844,6 @@ document.getElementById('import-btn').addEventListener('click',()=>{
     _broadcastState();
   } catch(e){ alert('Erreur : '+e.message); }
 });
-
-// Chargement automatique depuis URL ?agents= (ouverture via bookmarklet)
-(function(){
-  if(_loadFromURL()){
-    console.log('Agents chargés depuis URL : '+TECHNICIANS.length+' tech');
-    // Afficher un badge sur le bouton importer pour signaler que des agents sont prêts
-    setTimeout(function(){
-      var btn = document.getElementById('import-btn');
-      if(btn) {
-        btn.style.background = 'var(--color-primary)';
-        btn.style.color = '#fff';
-        btn.style.borderColor = 'var(--color-primary)';
-        btn.title = TECHNICIANS.length + ' agents prêts à importer depuis Brightmetrics';
-      }
-    }, 500);
-  }
-})();
 
 
 // ── REFRESH BUTTON ────────────────────────────────────────────────────────────
@@ -928,23 +912,32 @@ function _applyAgentList(names){
   buildTechCodes();
 }
 
-// Lit le paramètre ?agents= dans l'URL et peuple la liste
-var _importedFromURL = false;
-function _loadFromURL(){
+// Lit ?agents= dans l'URL et le stocke en sessionStorage puis nettoie l'URL
+function _processURLAgents(){
   try {
     var params=new URLSearchParams(window.location.search);
     var raw=params.get('agents');
+    if(raw){
+      sessionStorage.setItem('pb_agents', raw);
+      window.history.replaceState({},'',window.location.pathname);
+    }
+  } catch(e){}
+}
+
+// Charge les agents depuis sessionStorage si disponible
+function _loadSessionAgents(){
+  try {
+    var raw=sessionStorage.getItem('pb_agents');
     if(!raw) return false;
     var names=JSON.parse(decodeURIComponent(raw));
     if(!Array.isArray(names)||names.length===0) return false;
     _applyAgentList(names);
-    _importedFromURL = true;
-    // Nettoyer l'URL sans recharger la page
-    var clean=window.location.pathname;
-    window.history.replaceState({},'',clean);
     return true;
   } catch(e){ return false; }
 }
+
+// Appel immédiat au chargement de la page
+_processURLAgents();
 
 // ── LOCK SCREEN ───────────────────────────────────────────────────────────────
 (function(){
@@ -989,14 +982,11 @@ function _loadFromURL(){
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
     // Forcer une lecture fraîche à la connexion
     _fbLastHash = '';
-    // Si agents importés via bookmarklet, les appliquer automatiquement pour le pilote
-    if(IS_PILOT && _importedFromURL){
-      addLog('--- Import Brightmetrics auto : '+TECHNICIANS.length+' agents ('+nowStr()+') ---');
-      showToast(TECHNICIANS.length+' agents Brightmetrics chargés automatiquement','success');
+    // Si pilote : charger agents Brightmetrics depuis sessionStorage si disponible
+    if(IS_PILOT && _loadSessionAgents()){
       buildTechCodes();
-      _importedFromURL = false;
-      var btn=document.getElementById('import-btn');
-      if(btn){btn.style.background='';btn.style.color='';btn.style.borderColor='';}
+      showToast(TECHNICIANS.length+' agents Brightmetrics chargés ✅','success');
+      sessionStorage.removeItem('pb_agents');
     }
     // Lecture immédiate Firebase puis démarrage du polling
     _fbRead(function() {
