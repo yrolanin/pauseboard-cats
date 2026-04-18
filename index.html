@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.15</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.0</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -944,6 +944,23 @@ function _loadSessionAgents(){
 
 // Appel immédiat au chargement de la page
 _processURLAgents();
+
+// Lecture anticipée de Firebase pour construire TECH_CODES avant la connexion tech
+(function _fbPreloadTechCodes(){
+  try {
+    fetch(FB_URL + FB_CONFIG_PATH)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data && data.technicians && data.technicians.length){
+        TECHNICIANS.length = 0;
+        data.technicians.forEach(function(t,i){ TECHNICIANS.push(t); });
+        buildTechCodes();
+        console.log('TECH_CODES préchargés depuis Firebase : '+Object.keys(TECH_CODES).length+' codes');
+      }
+    })
+    .catch(function(){});
+  } catch(e){}
+})();
 
 // ── LOCK SCREEN ───────────────────────────────────────────────────────────────
 (function(){
