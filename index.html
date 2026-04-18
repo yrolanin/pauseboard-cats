@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.0</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.1</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -657,20 +657,24 @@ function _applyState(d) {
     if(d.currentPeriod !== undefined) currentPeriod = d.currentPeriod;
   }
   // techState : fusionner pour ne pas écraser les états locaux récents
-  if(d.techState !== undefined) {
-    Object.keys(d.techState).forEach(function(id) {
-      var numId = parseInt(id);
-      if(techState[numId] !== undefined) {
-        techState[numId] = d.techState[id];
-      }
-    });
-  }
-  if(d.log !== undefined)         log           = d.log;
   if(d.technicians && d.technicians.length) {
     TECHNICIANS.length = 0;
     d.technicians.forEach(function(t){ TECHNICIANS.push(t); });
     buildTechCodes();
+    // Reconstruire techState pour inclure tous les nouveaux techs
+    TECHNICIANS.forEach(function(t){
+      if(techState[t.id] === undefined){
+        techState[t.id] = {col:'available',pause1Time:null,pause2Time:null};
+      }
+    });
   }
+  if(d.techState !== undefined) {
+    Object.keys(d.techState).forEach(function(id) {
+      var numId = parseInt(id);
+      techState[numId] = d.techState[id];
+    });
+  }
+  if(d.log !== undefined) log = d.log;
   if(IS_PILOT) {
     var el = document.getElementById('max-tokens-display');
     if(el) el.textContent = maxTokens;
