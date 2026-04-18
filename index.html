@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.11</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v5.12</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -826,22 +826,6 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
 document.getElementById('clear-log').addEventListener('click',()=>{ log=[]; renderLog(); });
 
 document.getElementById('import-btn').addEventListener('click',()=>{
-  // Si des agents ont déjà été chargés via le bookmarklet (URL ?agents=)
-  if(_importedFromURL){
-    var names = TECHNICIANS.map(function(t){ return t.name; });
-    if(!confirm('Appliquer la liste de '+names.length+' agents importés depuis Brightmetrics ?\n\n'+names.join('\n'))) return;
-    addLog('--- Import Brightmetrics : '+names.length+' agents ('+nowStr()+') ---');
-    showToast(names.length+' agents importés depuis Brightmetrics','success');
-    renderAll();
-    TECHNICIANS.forEach(function(t){ _fbWriteTech(t.id); });
-    _broadcastState();
-    _importedFromURL = false;
-    // Remettre le bouton en style normal
-    var btn=document.getElementById('import-btn');
-    if(btn){btn.style.background='';btn.style.color='';btn.style.borderColor='';}
-    return;
-  }
-  // Sinon, demander l'URL manuellement
   var url = prompt('Collez ici l\'URL générée par le bookmarklet Brightmetrics\n(ou laissez vide pour annuler) :');
   if(!url) return;
   try {
@@ -1005,9 +989,17 @@ function _loadFromURL(){
     if(logPanel) logPanel.style.display = IS_PILOT ? '' : 'none';
     // Forcer une lecture fraîche à la connexion
     _fbLastHash = '';
+    // Si agents importés via bookmarklet, les appliquer automatiquement pour le pilote
+    if(IS_PILOT && _importedFromURL){
+      addLog('--- Import Brightmetrics auto : '+TECHNICIANS.length+' agents ('+nowStr()+') ---');
+      showToast(TECHNICIANS.length+' agents Brightmetrics chargés automatiquement','success');
+      buildTechCodes();
+      _importedFromURL = false;
+      var btn=document.getElementById('import-btn');
+      if(btn){btn.style.background='';btn.style.color='';btn.style.borderColor='';}
+    }
     // Lecture immédiate Firebase puis démarrage du polling
     _fbRead(function() {
-      // Callback après chargement initial : pilote écrit son état
       if(IS_PILOT) { buildTechCodes(); _broadcastState(); }
     });
     _fbPollTimer = setInterval(_fbRead, 3000);
