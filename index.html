@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v7.0</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v7.2</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -540,11 +540,12 @@ function renderColumn(elId, techs, colType){
     }
 
     let timeLabel = '';
-    if(IS_PILOT){
+    const isMyCard = !IS_PILOT && CURRENT_TECH !== null && t.name === CURRENT_TECH;
+    if(IS_PILOT || isMyCard){
       if(colType==='pause1' && s.pause1Ts) timeLabel = `<span class="pause-timer" data-ts="${s.pause1Ts}">⏱ 00:00</span>`;
       else if(colType==='pause2' && s.pause2Ts) timeLabel = `<span class="pause-timer" data-ts="${s.pause2Ts}">⏱ 00:00</span>`;
-      else if(s.pause1Time && s.pause2Time) timeLabel = `P1✓ P2✓`;
-      else if(s.pause1Time) timeLabel = `Pause 1 faite`;
+      else if(IS_PILOT && s.pause1Time && s.pause2Time) timeLabel = `P1✓ P2✓`;
+      else if(IS_PILOT && s.pause1Time) timeLabel = `Pause 1 faite`;
     }
 
     return `
@@ -728,7 +729,7 @@ function _fbWriteConfig() {
 function _fbWriteTech(techId) {
   var s = techState[techId];
   if(!s) return;
-  var payload = { col: s.col, pause1Time: s.pause1Time, pause2Time: s.pause2Time, updatedAt: Date.now() };
+  var payload = { col: s.col, pause1Time: s.pause1Time, pause2Time: s.pause2Time, pause1Ts: s.pause1Ts||null, pause2Ts: s.pause2Ts||null, updatedAt: Date.now() };
   fetch(FB_URL + FB_TECHS_PATH + 'tech_' + techId + '.json', {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
@@ -772,7 +773,7 @@ function _fbRead(callback) {
         // Clé format 'tech_2' -> extraire l'ID numérique
         var numId = parseInt(key.toString().replace('tech_', ''));
         if(!isNaN(numId) && t) {
-          newTechState[numId] = { col: t.col, pause1Time: t.pause1Time || null, pause2Time: t.pause2Time || null };
+          newTechState[numId] = { col: t.col, pause1Time: t.pause1Time || null, pause2Time: t.pause2Time || null, pause1Ts: t.pause1Ts || null, pause2Ts: t.pause2Ts || null };
         }
       });
       merged.techState = newTechState;
