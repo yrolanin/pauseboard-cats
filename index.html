@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v6.9</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v7.0</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -539,10 +539,13 @@ function renderColumn(elId, techs, colType){
       }
     }
 
-    const timeLabel = colType==='pause1' && s.pause1Time ? `depuis ${s.pause1Time}` :
-                      colType==='pause2' && s.pause2Time ? `depuis ${s.pause2Time}` :
-                      s.pause1Time && s.pause2Time ? `P1✓ P2✓` :
-                      s.pause1Time ? `Pause 1 faite` : '';
+    let timeLabel = '';
+    if(IS_PILOT){
+      if(colType==='pause1' && s.pause1Ts) timeLabel = `<span class="pause-timer" data-ts="${s.pause1Ts}">⏱ 00:00</span>`;
+      else if(colType==='pause2' && s.pause2Ts) timeLabel = `<span class="pause-timer" data-ts="${s.pause2Ts}">⏱ 00:00</span>`;
+      else if(s.pause1Time && s.pause2Time) timeLabel = `P1✓ P2✓`;
+      else if(s.pause1Time) timeLabel = `Pause 1 faite`;
+    }
 
     return `
       <div class="tech-card" id="tc-${t.id}">
@@ -590,12 +593,14 @@ function moveTech(id, direction){
         // go to pause1
         s.col='pause1';
         s.pause1Time=nowStr();
+        s.pause1Ts=Date.now();
         addLog(`${t.name} → Pause 1 (${s.pause1Time})`);
         showToast(`${t.name} est en Pause 1 ☕`, 'success');
       } else if(s.pause2Time===null){
         // go to pause2
         s.col='pause2';
         s.pause2Time=nowStr();
+        s.pause2Ts=Date.now();
         addLog(`${t.name} → Pause 2 (${s.pause2Time})`);
         showToast(`${t.name} est en Pause 2 🍵`, 'success');
       }
@@ -671,7 +676,7 @@ function _applyState(d) {
     // Reconstruire techState pour inclure tous les nouveaux techs
     TECHNICIANS.forEach(function(t){
       if(techState[t.id] === undefined){
-        techState[t.id] = {col:'available',pause1Time:null,pause2Time:null};
+        techState[t.id] = {col:'available',pause1Time:null,pause2Time:null,pause1Ts:null,pause2Ts:null};
       }
     });
   }
@@ -826,7 +831,7 @@ document.getElementById('period-select').addEventListener('change',e=>{
 document.getElementById('reset-btn').addEventListener('click',()=>{
   if(!confirm('Réinitialiser toutes les pauses du créneau ?')) return;
   TECHNICIANS.forEach(t=>{
-    techState[t.id]={col:'available',pause1Time:null,pause2Time:null};
+    techState[t.id]={col:'available',pause1Time:null,pause2Time:null,pause1Ts:null,pause2Ts:null};
   });
   addLog(`--- Réinitialisation complète (${nowStr()}) ---`);
   showToast('Pauses réinitialisées', 'success');
@@ -890,6 +895,23 @@ function updateClock(){
 updateClock();
 setInterval(updateClock, 10000);
 
+// ── LIVE PAUSE TIMERS (pilote uniquement) ────────────────────────────────────
+function updatePauseTimers(){
+  if(!IS_PILOT) return;
+  const now = Date.now();
+  document.querySelectorAll('.pause-timer').forEach(function(el){
+    const ts = parseInt(el.getAttribute('data-ts'));
+    if(!ts) return;
+    const elapsed = Math.floor((now - ts) / 1000);
+    const mm = String(Math.floor(elapsed / 60)).padStart(2,'0');
+    const ss = String(elapsed % 60).padStart(2,'0');
+    el.textContent = '⏱ ' + mm + ':' + ss;
+    // Colorer en rouge après 15 minutes
+    el.style.color = elapsed >= 900 ? 'var(--color-error)' : elapsed >= 600 ? 'var(--color-warning)' : '';
+  });
+}
+setInterval(updatePauseTimers, 1000);
+
 // ── THEME ────────────────────────────────────────────────────────────────────
 (function(){
   const t=document.querySelector('[data-theme-toggle]');
@@ -945,7 +967,7 @@ function _applyAgentList(names){
   });
   techState={};
   TECHNICIANS.forEach(function(t){
-    techState[t.id]={col:'available',pause1Time:null,pause2Time:null};
+    techState[t.id]={col:'available',pause1Time:null,pause2Time:null,pause1Ts:null,pause2Ts:null};
   });
   buildTechCodes();
 }
@@ -1020,7 +1042,7 @@ function _mergeAgentList(newNames){
   // techState : init pour les nouveaux seulement
   added.forEach(function(name){
     var t = TECHNICIANS.find(function(x){ return x.name===name; });
-    if(t) techState[t.id]={col:'available',pause1Time:null,pause2Time:null};
+    if(t) techState[t.id]={col:'available',pause1Time:null,pause2Time:null,pause1Ts:null,pause2Ts:null};
   });
 
   buildTechCodes();
