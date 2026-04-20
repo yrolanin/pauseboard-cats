@@ -248,7 +248,7 @@ input,select{font:inherit;color:inherit}
         </div>
       </div>
       <div class="time-badge" id="clock">--:--</div>
-      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v7.2</div>
+      <div class="time-badge" style="opacity:0.5;font-size:0.7em;">v7.3</div>
     </div>
     <div class="header-right"><span class="role-badge" id="role-badge" style="display:none"></span>
       <button class="theme-toggle" id="refresh-btn" aria-label="Actualiser" title="Actualiser les données" style="color:var(--color-primary)">
@@ -898,7 +898,6 @@ setInterval(updateClock, 10000);
 
 // ── LIVE PAUSE TIMERS (pilote uniquement) ────────────────────────────────────
 function updatePauseTimers(){
-  if(!IS_PILOT) return;
   const now = Date.now();
   document.querySelectorAll('.pause-timer').forEach(function(el){
     const ts = parseInt(el.getAttribute('data-ts'));
